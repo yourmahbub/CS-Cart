@@ -1,0 +1,6 @@
+{
+  "name": "UniTheme2 E-commerce Clone",
+  "description": "A high-fidelity clone of the UniTheme2 e-commerce template, featuring a complex header, detailed product cards, and responsive layout.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": []
+}
