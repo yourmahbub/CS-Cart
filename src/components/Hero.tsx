@@ -44,7 +44,7 @@ export function Hero() {
             const overlay = showContent ? (slide.overlayOpacity ?? 50) / 100 : 0;
 
             return (
-            <div key={slide.id} className="min-w-full relative h-full flex-shrink-0 cursor-pointer">
+            <div key={slide.id} className="w-full shrink-0 relative h-full cursor-pointer">
               <img 
                 src={slide.image || "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=1600&q=80"} 
                 alt={slide.title || 'Slide Image'}
