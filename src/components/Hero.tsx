@@ -29,8 +29,40 @@ export function Hero() {
 
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [ratios, setRatios] = useState<Record<string, number>>({});
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches,
+  );
+
+  // Phones get their own artwork when the slide has one.
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const sync = () => setIsNarrow(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   const count = sliders?.length ?? 0;
+
+  const hasText = (slide: any) =>
+    slide?.showContent !== false && !!(slide?.title || slide?.subtitle || slide?.buttonText);
+  const textOnAnySlide = (sliders ?? []).some(hasText);
+
+  /**
+   * How the artwork should fill the frame.
+   *
+   * The shop's own choice always wins. Otherwise a very wide banner shown on a
+   * phone falls back to being shown whole: cropping a 3:1 banner into a
+   * phone-shaped box throws away most of its width, which reads as broken
+   * rather than as a crop. Slides carrying text still fill the frame, because
+   * the text needs something behind it edge to edge.
+   */
+  const fitFor = (slide: any) => {
+    if (slide.fit === 'contain' || slide.fit === 'cover') return slide.fit;
+    if (!isNarrow || hasText(slide) || slide.mobileImage) return 'cover';
+    return (ratios[slide.id] ?? 0) > 2.2 ? 'contain' : 'cover';
+  };
 
   const nextSlide = useCallback(() => setCurrentSlide((p) => (p + 1) % count), [count]);
   const prevSlide = useCallback(() => setCurrentSlide((p) => (p === 0 ? count - 1 : p - 1)), [count]);
@@ -123,9 +155,13 @@ export function Hero() {
         // pan-y lets the browser keep vertical scrolling while we take the
         // horizontal axis; without it a swipe fights the page scroll.
         style={{ touchAction: 'pan-y' }}
-        className={`w-full relative group overflow-hidden select-none h-[380px] sm:h-[440px] lg:h-[520px] xl:h-[560px] ${
-          count > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : ''
-        }`}
+        className={`w-full relative group overflow-hidden select-none ${
+          // Slides carrying text need vertical room for it; an image-only
+          // slider follows the artwork's own proportions on small screens.
+          textOnAnySlide
+            ? 'h-[300px] sm:h-[440px] lg:h-[520px] xl:h-[560px]'
+            : 'aspect-[16/7] sm:aspect-auto sm:h-[440px] lg:h-[520px] xl:h-[560px]'
+        } ${count > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
       >
 
         {/* Slides Track */}
@@ -144,15 +180,41 @@ export function Hero() {
               slide.showContent !== false &&
               !!(slide.title || slide.subtitle || slide.buttonText);
             const overlay = showContent ? (slide.overlayOpacity ?? 50) / 100 : 0;
+            const src =
+              (isNarrow && slide.mobileImage) ||
+              slide.image ||
+              'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=1600&q=80';
+            const fit = fitFor(slide);
 
             return (
             <div key={slide.id} className="w-full shrink-0 relative h-full">
+              {/* A blurred copy fills the letterbox, so showing the whole
+                  picture reads as deliberate instead of as empty margin. */}
+              {fit === 'contain' && (
+                <img
+                  src={src}
+                  alt=""
+                  aria-hidden
+                  draggable={false}
+                  className="absolute inset-0 w-full h-full object-cover blur-2xl scale-110 opacity-60 pointer-events-none"
+                />
+              )}
               <img
-                src={slide.image || "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=1600&q=80"}
+                src={src}
                 alt={slide.title || 'Slide Image'}
                 // Native image dragging would hijack a mouse swipe.
                 draggable={false}
-                className="w-full h-full object-cover object-center pointer-events-none"
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  if (!img.naturalHeight) return;
+                  const ratio = img.naturalWidth / img.naturalHeight;
+                  setRatios((prev) => (prev[slide.id] === ratio ? prev : { ...prev, [slide.id]: ratio }));
+                }}
+                style={{
+                  objectFit: fit,
+                  objectPosition: `${slide.focalX ?? 50}% ${slide.focalY ?? 50}%`,
+                }}
+                className="relative w-full h-full pointer-events-none"
               />
 
               {/* Dark overlay — only when text sits on top of the image */}

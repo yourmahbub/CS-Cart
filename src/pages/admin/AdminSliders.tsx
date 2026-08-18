@@ -102,12 +102,71 @@ export default function AdminSliders() {
                    </div>
                    <div className="space-y-4">
                      <ImageUpload
+                       label="Desktop image"
                        value={formData.image || ''}
                        onChange={(url) => setFormData({ ...formData, image: url })}
                        height={110}
                        previewClass="bg-gray-100"
                        hint="Wide landscape images work best — around 1920×700. PNG, JPG, WEBP or GIF, up to 2 MB."
                      />
+
+                     <ImageUpload
+                       label="Mobile image (optional)"
+                       value={formData.mobileImage || ''}
+                       onChange={(url) => setFormData({ ...formData, mobileImage: url })}
+                       height={110}
+                       previewClass="bg-gray-100"
+                       hint="A phone-shaped crop, around 800×1000. Without one the desktop image is used — and a wide banner loses most of its width on a narrow screen."
+                     />
+
+                     {/* How the picture fills the frame. A wide banner usually reads
+                         better shown whole than cropped into a phone-shaped box. */}
+                     <div>
+                       <label className="block text-sm font-semibold mb-1.5 text-gray-700">Image fit</label>
+                       <div className="flex gap-2">
+                         {([['cover', 'Fill frame'], ['contain', 'Show whole image']] as const).map(([mode, label]) => (
+                           <button
+                             key={mode}
+                             type="button"
+                             onClick={() => setFormData({ ...formData, fit: mode })}
+                             className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                               (formData.fit ?? 'cover') === mode
+                                 ? 'bg-[#00a651] text-white border-[#00a651]'
+                                 : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                             }`}
+                           >
+                             {label}
+                           </button>
+                         ))}
+                       </div>
+                       <p className="text-[11px] text-gray-400 mt-1.5">
+                         {(formData.fit ?? 'cover') === 'cover'
+                           ? 'Fills the frame; whatever falls outside is cropped.'
+                           : 'The whole picture stays visible, letterboxed if it does not match the frame.'}
+                       </p>
+                     </div>
+
+                     {/* Which part survives the crop. Only meaningful when filling. */}
+                     <div className={(formData.fit ?? 'cover') === 'cover' ? '' : 'opacity-40 pointer-events-none'}>
+                       <label className="block text-sm font-semibold mb-1.5 text-gray-700">Focal point</label>
+                       <div className="grid grid-cols-3 gap-1 w-[108px]">
+                         {[0, 50, 100].map((y) => [0, 50, 100].map((x) => {
+                           const active = (formData.focalX ?? 50) === x && (formData.focalY ?? 50) === y;
+                           return (
+                             <button
+                               key={`${x}-${y}`}
+                               type="button"
+                               aria-label={`Focus ${x}% ${y}%`}
+                               onClick={() => setFormData({ ...formData, focalX: x, focalY: y })}
+                               className={`h-8 rounded-md border transition-colors ${
+                                 active ? 'bg-[#00a651] border-[#00a651]' : 'bg-gray-50 border-gray-200 hover:border-gray-400'
+                               }`}
+                             />
+                           );
+                         }))}
+                       </div>
+                       <p className="text-[11px] text-gray-400 mt-1.5">The part of the picture kept in view when it has to be cropped.</p>
+                     </div>
                    </div>
                  </div>
 
