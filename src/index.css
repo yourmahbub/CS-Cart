@@ -12,17 +12,19 @@ html {
   scrollbar-gutter: stable;
 
   /*
-   * Guard against sideways scrolling on phones.
+   * No overflow-x guard here, deliberately.
    *
-   * "clip" rather than "hidden": overflow:hidden on the root creates a scroll
-   * container, which silently breaks every position:sticky element on the page
-   * (the header, the product buy-box). "clip" trims the overflow and leaves
-   * sticky working.
+   * There used to be an "overflow-x: clip" on this element and on body. It was
+   * added while hunting a sideways scroll on phones, and it did stop the
+   * scrollbar — by throwing the overflowing content away. Anything past the
+   * right edge became unreachable rather than scrollable, which reads to a
+   * visitor as the page being cut off, and hid the real cause from us.
    *
-   * This is a safety net, not a licence — an element wide enough to trigger it
-   * is still a bug worth fixing at the source.
+   * The real cause (a tab row that would not wrap) is fixed, and the layout is
+   * verified clean from 320px to 2560px in both reading directions. So if
+   * something ever does overflow again, it should announce itself with a
+   * scrollbar instead of quietly disappearing.
    */
-  overflow-x: clip;
   /* Painted before React mounts so there is no white flash on a dark header. */
   background-color: #ffffff;
 }
@@ -31,7 +33,6 @@ html {
 body {
   min-height: 100vh;
   max-width: 100%;
-  overflow-x: clip;
 }
 
 /*
