@@ -201,7 +201,7 @@ export function CategoryGridEditor({ value, onChange, categories, tr }: {
             >
               <div
                 className={`min-h-0 flex items-center justify-center ${cfg.labelPosition === 'overlay' ? 'absolute inset-0' : 'flex-1'}`}
-                style={cfg.labelPosition === 'overlay' ? undefined : { padding: cfg.imageFit === 'cover' ? 0 : '8%' }}
+                style={cfg.labelPosition === 'overlay' ? undefined : { padding: 0 }}
               >
                 {c.image && (
                   <img
@@ -210,7 +210,7 @@ export function CategoryGridEditor({ value, onChange, categories, tr }: {
                     className={cfg.blendImage && cfg.imageFit === 'contain' ? 'mix-blend-multiply' : ''}
                     style={cfg.imageFit === 'cover'
                       ? { width: '100%', height: '100%', objectFit: 'cover' }
-                      : { maxWidth: `${cfg.imageScale}%`, maxHeight: `${cfg.imageScale}%`, objectFit: 'contain' }}
+                      : { width: `${cfg.imageScale}%`, height: `${cfg.imageScale}%`, objectFit: 'contain' }}
                   />
                 )}
               </div>
