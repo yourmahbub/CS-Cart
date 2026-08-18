@@ -3,18 +3,40 @@ import { Link } from 'react-router-dom';
 import {
   ShoppingCart, Users, Package, MessageSquare, TrendingUp, TrendingDown,
   ArrowRight, AlertTriangle, Wallet, Receipt, Languages,
-  PackageX, EyeOff, Info, ArrowUpRight, CheckCircle2,
+  PackageX, EyeOff, Info, ArrowUpRight, CheckCircle2, CalendarDays,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
 import { ORDER_STATUS_STYLE, formatOrderDate } from '../../lib/orderStatus';
 
-const RANGES = [
-  { days: 7, label: '7D' },
-  { days: 30, label: '30D' },
-  { days: 90, label: '90D' },
-  { days: 0, label: 'All' },
-];
+const PRESETS = [
+  { key: 'today', label: 'Today', days: 1 },
+  { key: '7d', label: '7D', days: 7 },
+  { key: '30d', label: '30D', days: 30 },
+  { key: '90d', label: '90D', days: 90 },
+  { key: 'all', label: 'All', days: 0 },
+] as const;
+
+type PresetKey = (typeof PRESETS)[number]['key'] | 'custom';
+
+/**
+ * Minutes east of UTC. Orders are stored in UTC but a shop's day is its own,
+ * so the server needs the offset to line day boundaries up with the till.
+ */
+const TZ = -new Date().getTimezoneOffset();
+
+const isoDay = (ms: number) => new Date(ms + TZ * 60000).toISOString().slice(0, 10);
+const today = () => isoDay(Date.now());
+/** n days before the given calendar day, staying on calendar days. */
+const minusDays = (day: string, n: number) => new Date(Date.parse(day + 'T00:00:00Z') - n * 86400000).toISOString().slice(0, 10);
+
+/** A preset resolved to the window it means right now. */
+function windowFor(key: PresetKey): { from: string; to: string; all: boolean } {
+  const to = today();
+  const preset = PRESETS.find((p) => p.key === key);
+  if (!preset || preset.days === 0) return { from: '', to, all: true };
+  return { from: minusDays(to, preset.days - 1), to, all: false };
+}
 
 /**
  * The four headline figures. Picking one redraws the chart below it.
@@ -48,7 +70,8 @@ function compact(n: number): string {
 
 export default function AdminDashboard() {
   const { formatPrice } = useCart();
-  const [days, setDays] = useState(30);
+  const [preset, setPreset] = useState<PresetKey>('30d');
+  const [range, setRange] = useState(() => windowFor('30d'));
   const [metric, setMetric] = useState<MetricKey>('revenue');
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -57,12 +80,32 @@ export default function AdminDashboard() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api.get<any>(`/admin/stats?days=${days}`)
+    const qs = range.all
+      ? `all=1&to=${range.to}&tz=${TZ}`
+      : `from=${range.from}&to=${range.to}&tz=${TZ}`;
+    api.get<any>(`/admin/stats?${qs}`)
       .then((d) => { if (!cancelled) { setStats(d); setError(''); } })
       .catch((err: any) => { if (!cancelled) setError(err?.message ?? 'The dashboard could not load.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [days]);
+  }, [range.from, range.to, range.all]);
+
+  const choosePreset = (key: PresetKey) => {
+    setPreset(key);
+    if (key !== 'custom') setRange(windowFor(key));
+  };
+
+  /** Editing either end keeps the other, so a half-typed range never fetches. */
+  const setEnd = (which: 'from' | 'to', value: string) => {
+    if (!value) return;
+    setPreset('custom');
+    setRange((prev) => {
+      const next = { ...prev, all: false, [which]: value };
+      if (!next.from) next.from = next.to;
+      if (!next.to) next.to = next.from;
+      return next;
+    });
+  };
 
   if (loading && !stats) return <Skeleton />;
   if (error && !stats) {
@@ -78,7 +121,13 @@ export default function AdminDashboard() {
     current, previous, series, previousSeries, statusBreakdown,
     topProducts, lowStock, recentOrders, tasks, totals,
   } = stats;
-  const comparable = days !== 0 && previous.orders > 0;
+  const comparable = !!stats.hasPrevious;
+
+  const rangeLabel = stats.days === 1
+    ? (stats.to === today() ? 'Today' : stats.to)
+    : preset === 'all'
+      ? `All time · ${stats.from} to ${stats.to}`
+      : `${stats.from} to ${stats.to} · ${stats.days} days`;
   const fmt = (key: MetricKey, v: number) =>
     METRICS.find((m) => m.key === key)!.money ? formatPrice(v) : String(v);
 
@@ -87,23 +136,53 @@ export default function AdminDashboard() {
       <header className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-[22px] font-bold text-gray-900 tracking-[-0.01em]">Overview</h2>
-          <p className="text-[13px] text-gray-500 mt-0.5">
-            {days === 0 ? 'All time' : `Last ${days} days`}
-            {comparable && <span className="text-gray-400"> · compared with the {days} before</span>}
+          <p className="text-[13px] text-gray-500 mt-0.5 tabular-nums">
+            {rangeLabel}
+            {comparable && (
+              <span className="text-gray-400">
+                {' · compared with '}
+                {stats.days === 1 ? 'the day before' : 'the ' + stats.days + ' days before'}
+              </span>
+            )}
           </p>
         </div>
-        <div className="flex items-center gap-1 bg-gray-100/80 rounded-lg p-0.5" role="tablist" aria-label="Date range">
-          {RANGES.map((r) => (
-            <button
-              key={r.days} role="tab" aria-selected={days === r.days}
-              onClick={() => setDays(r.days)}
-              className={`px-3 py-1.5 rounded-md text-[12.5px] font-semibold tabular-nums transition-all ${
-                days === r.days ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(16,24,40,0.08)]' : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-gray-100/80 rounded-lg p-0.5" role="tablist" aria-label="Date range">
+            {PRESETS.map((r) => (
+              <button
+                key={r.key} role="tab" aria-selected={preset === r.key}
+                onClick={() => choosePreset(r.key)}
+                className={`px-3 py-1.5 rounded-md text-[12.5px] font-semibold tabular-nums transition-all ${
+                  preset === r.key ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(16,24,40,0.08)]' : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+
+          <div className={`flex items-center gap-1.5 rounded-lg px-2 py-1 ring-1 transition-colors ${
+            preset === 'custom' ? 'bg-white ring-[#00a651]/40' : 'bg-gray-100/80 ring-transparent'
+          }`}>
+            <CalendarDays className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <input
+              type="date" aria-label="From"
+              value={range.all ? (stats?.from ?? '') : range.from}
+              max={range.to || undefined}
+              min={stats?.firstOrderDate ?? undefined}
+              onChange={(e) => setEnd('from', e.target.value)}
+              className="bg-transparent text-[12px] font-semibold text-gray-700 tabular-nums outline-none w-[110px]"
+            />
+            <span className="text-gray-300 text-[12px]">→</span>
+            <input
+              type="date" aria-label="To"
+              value={range.to}
+              min={range.all ? undefined : range.from || undefined}
+              max={today()}
+              onChange={(e) => setEnd('to', e.target.value)}
+              className="bg-transparent text-[12px] font-semibold text-gray-700 tabular-nums outline-none w-[110px]"
+            />
+          </div>
         </div>
       </header>
 

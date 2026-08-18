@@ -593,26 +593,65 @@ api.get('/admin/customers', requireAdmin, (_req, res) => {
 /**
  * Dashboard analytics.
  *
- * Everything is aggregated in SQL rather than shipped to the browser, and the
- * same figures are computed for the window immediately before the one asked
- * for, so the dashboard can show movement rather than a bare number.
+ * The window is given as explicit calendar dates (`from`/`to`, inclusive) plus
+ * the viewer's UTC offset in minutes, or `all=1` for everything on record.
  *
- * Cancelled and failed orders are excluded from money; they are still counted
- * in the status breakdown so the shop can see them.
+ * Timestamps are stored in UTC, but a shop's day is its own local day. For a
+ * Kuwait store at UTC+3 an order placed at 01:00 local is 22:00 UTC the day
+ * before, so comparing on UTC dates would file it under yesterday and "Today"
+ * would be wrong every night. The offset shifts both the window boundaries and
+ * the daily grouping so days line up with the shop's clock.
+ *
+ * Everything is aggregated in SQL rather than shipped to the browser, and the
+ * same figures are computed for the window immediately before, so the
+ * dashboard can show movement rather than a bare number.
  */
 api.get('/admin/stats', requireAdmin, (req, res) => {
   const one = (sql: string, ...args: any[]) => (db.prepare(sql).get(...args) as any) ?? {};
   const all = (sql: string, ...args: any[]) => db.prepare(sql).all(...args) as any[];
 
-  // 0 means "everything so far".
-  const days = Math.min(Math.max(int(req.query.days, 30), 0), 3650);
   const LIVE = "o.status NOT IN ('cancelled','failed')";
+  const DAY = 86400000;
 
-  // The previous window is the same length immediately before, so a 30-day
-  // view compares against the 30 days before it.
-  const since = days ? "datetime('now', '-" + days + " days')" : "datetime('1970-01-01')";
-  const prevSince = days ? "datetime('now', '-" + days * 2 + " days')" : "datetime('1970-01-01')";
-  const now = "datetime('now', '+1 day')";
+  // Minutes east of UTC, as the browser reports it. Clamped to the real range.
+  const tz = Math.min(Math.max(int(req.query.tz, 0), -840), 840);
+  const shift = (tz >= 0 ? '+' : '-') + Math.abs(tz) + ' minutes';
+  /** Local calendar date of an order, for grouping. */
+  const localDate = "date(o.created_at, '" + shift + "')";
+
+  const isDate = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const wantsAll = String(req.query.all ?? '') === '1';
+
+  // Midnight local on `date`, expressed as the UTC instant SQLite stores.
+  const startUtc = (date: string) => Date.parse(date + 'T00:00:00Z') - tz * 60000;
+  const sqlTime = (ms: number) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+  const localDay = (ms: number) => new Date(ms + tz * 60000).toISOString().slice(0, 10);
+
+  let fromDate: string;
+  let toDate: string;
+  if (isDate(req.query.from) && isDate(req.query.to)) {
+    fromDate = String(req.query.from);
+    toDate = String(req.query.to);
+    if (fromDate > toDate) { const swap = fromDate; fromDate = toDate; toDate = swap; }
+  } else {
+    // No explicit window: fall back to the last 30 local days.
+    toDate = localDay(Date.now());
+    fromDate = localDay(startUtc(toDate) - 29 * DAY);
+  }
+
+  const oldest = one('SELECT MIN(created_at) AS d FROM orders').d as string | null;
+  const oldestLocal = oldest ? localDay(Date.parse(oldest.replace(' ', 'T') + 'Z')) : null;
+  if (wantsAll) fromDate = oldestLocal ?? toDate;
+
+  const spanDays = Math.max(1, Math.round((startUtc(toDate) - startUtc(fromDate)) / DAY) + 1);
+  const windowStart = startUtc(fromDate);
+  const windowEnd = startUtc(toDate) + DAY;
+  const prevStart = windowStart - spanDays * DAY;
+
+  const q = (ms: number) => "'" + sqlTime(ms) + "'";
+  const since = q(windowStart);
+  const until = q(windowEnd);
+  const prevSince = q(prevStart);
 
   const money = (from: string, to: string) => {
     const row = one(
@@ -639,47 +678,51 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
     };
   };
 
-  const current = money(since, now);
+  const current = money(since, until);
   const previous = money(prevSince, since);
 
-  // Daily series for the chart. Days with no orders still need a point, so the
-  // gaps are filled here rather than leaving the line to jump across them.
-  // The same shape is built for the window before, so the chart can lay the
-  // previous period underneath as a comparison.
-  const buildSeries = (fromExpr: string, offsetDays: number, length: number) => {
+  // Daily series. Days with no orders still need a point, so gaps are filled
+  // here rather than leaving the line to jump across them. A long window is
+  // bucketed by week so an all-time view does not draw thousands of points.
+  const bucketDays = spanDays > 120 ? 7 : 1;
+  const buildSeries = (startMs: number, length: number) => {
+    const endMs = startMs + length * DAY;
     const rows = all(
-      'SELECT date(o.created_at) AS day, COALESCE(SUM(o.total),0) AS revenue, COUNT(*) AS orders,' +
+      'SELECT ' + localDate + ' AS day, COALESCE(SUM(o.total),0) AS revenue, COUNT(*) AS orders,' +
       '       COALESCE(SUM(o.subtotal),0) AS goods,' +
-      '       (SELECT COALESCE(SUM(oi.unit_cost * oi.quantity),0) FROM order_items oi' +
-      '         WHERE oi.order_id IN (SELECT id FROM orders o2 WHERE date(o2.created_at) = date(o.created_at)' +
-      "                                 AND o2.status NOT IN ('cancelled','failed'))) AS cost" +
-      '  FROM orders o WHERE ' + LIVE + ' AND o.created_at >= ' + fromExpr +
+      '       COALESCE(SUM((SELECT SUM(oi.unit_cost * oi.quantity) FROM order_items oi' +
+      '                      WHERE oi.order_id = o.id)), 0) AS cost' +
+      '  FROM orders o WHERE ' + LIVE +
+      '   AND o.created_at >= ' + q(startMs) + ' AND o.created_at < ' + q(endMs) +
       ' GROUP BY day ORDER BY day',
     );
     const byDay = new Map(rows.map((r) => [r.day as string, r]));
     const out: any[] = [];
-    for (let i = length - 1; i >= 0; i--) {
-      const day = new Date(Date.now() - (i + offsetDays) * 86400000).toISOString().slice(0, 10);
-      const r = byDay.get(day);
+    for (let i = 0; i < length; i += bucketDays) {
+      let revenue = 0, orders = 0, goods = 0, cost = 0;
+      for (let d = 0; d < bucketDays && i + d < length; d++) {
+        const r = byDay.get(localDay(startMs + (i + d) * DAY));
+        if (!r) continue;
+        revenue += r.revenue; orders += r.orders; goods += r.goods; cost += r.cost;
+      }
       out.push({
-        day,
-        revenue: r ? Math.round(r.revenue * 1000) / 1000 : 0,
-        orders: r ? r.orders : 0,
-        profit: r ? Math.round((r.goods - r.cost) * 1000) / 1000 : 0,
-        aov: r && r.orders ? Math.round((r.revenue / r.orders) * 1000) / 1000 : 0,
+        day: localDay(startMs + i * DAY),
+        revenue: Math.round(revenue * 1000) / 1000,
+        orders,
+        profit: Math.round((goods - cost) * 1000) / 1000,
+        aov: orders ? Math.round((revenue / orders) * 1000) / 1000 : 0,
       });
     }
     return out;
   };
 
-  const span = days || 30;
-  const series = buildSeries(since, 0, span);
-  // Only meaningful when a fixed window was asked for; "all time" has no before.
-  const previousSeries = days ? buildSeries(prevSince, span, span) : [];
+  const series = buildSeries(windowStart, spanDays);
+  const previousSeries = buildSeries(prevStart, spanDays);
 
   const statusBreakdown = all(
-    'SELECT status, COUNT(*) AS n, COALESCE(SUM(total),0) AS total FROM orders' +
-    ' WHERE created_at >= ' + since + ' GROUP BY status ORDER BY n DESC',
+    'SELECT status, COUNT(*) AS n, COALESCE(SUM(total),0) AS total FROM orders o' +
+    ' WHERE o.created_at >= ' + since + ' AND o.created_at < ' + until +
+    ' GROUP BY status ORDER BY n DESC',
   );
 
   const topProducts = all(
@@ -687,7 +730,7 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
     '       ROUND(SUM(oi.unit_price * oi.quantity), 3) AS revenue,' +
     '       ROUND(SUM((oi.unit_price - oi.unit_cost) * oi.quantity), 3) AS profit' +
     '  FROM order_items oi JOIN orders o ON o.id = oi.order_id' +
-    ' WHERE ' + LIVE + ' AND o.created_at >= ' + since +
+    ' WHERE ' + LIVE + ' AND o.created_at >= ' + since + ' AND o.created_at < ' + until +
     ' GROUP BY oi.product_id, oi.title ORDER BY revenue DESC LIMIT 8',
   );
 
@@ -708,19 +751,11 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
     createdAt: o.created_at,
   }));
 
-  // Things the shop can act on; each maps to a link in the dashboard.
   const tasks = {
     pendingOrders: one("SELECT COUNT(*) AS n FROM orders WHERE status IN ('pending','paid','processing')").n,
     pendingReviews: one("SELECT COUNT(*) AS n FROM reviews WHERE status = 'pending'").n,
     outOfStock: one('SELECT COUNT(*) AS n FROM products WHERE published = 1 AND stock <= 0').n,
     withoutCost: one('SELECT COUNT(*) AS n FROM products WHERE cost_price <= 0').n,
-    // unit_cost is snapshotted when the order is placed, so orders taken
-    // before a cost price existed report as pure profit. Surfaced so the
-    // dashboard can say the margin is understated rather than imply it is exact.
-    linesWithoutCost: one(
-      'SELECT COUNT(*) AS n FROM order_items oi JOIN orders o ON o.id = oi.order_id' +
-      ' WHERE ' + LIVE + ' AND o.created_at >= ' + since + ' AND oi.unit_cost <= 0',
-    ).n,
     unpublished: one('SELECT COUNT(*) AS n FROM products WHERE published = 0').n,
     // A bilingual storefront quietly falls back to English when Arabic is
     // missing, so an untranslated catalogue is easy to ship without noticing.
@@ -728,6 +763,14 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
       "SELECT COUNT(*) AS n FROM products WHERE COALESCE(json_extract(extra, '$.i18n.ar.title'), '') = ''",
     ).n,
     categoriesWithoutArabic: one("SELECT COUNT(*) AS n FROM categories WHERE COALESCE(name_ar,'') = ''").n,
+    // unit_cost is stamped when the order is placed, so orders taken before a
+    // cost price existed report as pure profit. Surfaced so the dashboard can
+    // say the margin is overstated rather than imply it is exact.
+    linesWithoutCost: one(
+      'SELECT COUNT(*) AS n FROM order_items oi JOIN orders o ON o.id = oi.order_id' +
+      ' WHERE ' + LIVE + ' AND o.created_at >= ' + since + ' AND o.created_at < ' + until +
+      '   AND oi.unit_cost <= 0',
+    ).n,
   };
 
   const totals = {
@@ -738,7 +781,15 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
   };
 
   res.json({
-    days, current, previous, series, previousSeries, statusBreakdown,
+    from: fromDate,
+    to: toDate,
+    days: spanDays,
+    bucketDays,
+    tz,
+    // The earliest order on record, so the picker can stop there.
+    firstOrderDate: oldestLocal,
+    hasPrevious: previous.orders > 0,
+    current, previous, series, previousSeries, statusBreakdown,
     topProducts, lowStock, recentOrders, tasks, totals,
   });
 });
