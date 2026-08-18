@@ -645,7 +645,11 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
   // Daily series for the chart. Days with no orders still need a point, so the
   // gaps are filled here rather than leaving the line to jump across them.
   const rows = all(
-    'SELECT date(o.created_at) AS day, COALESCE(SUM(o.total),0) AS revenue, COUNT(*) AS orders' +
+    'SELECT date(o.created_at) AS day, COALESCE(SUM(o.total),0) AS revenue, COUNT(*) AS orders,' +
+    '       COALESCE(SUM(o.subtotal),0) AS goods,' +
+    '       (SELECT COALESCE(SUM(oi.unit_cost * oi.quantity),0) FROM order_items oi' +
+    '         WHERE oi.order_id IN (SELECT id FROM orders o2 WHERE date(o2.created_at) = date(o.created_at)' +
+    "                                 AND o2.status NOT IN ('cancelled','failed'))) AS cost" +
     '  FROM orders o WHERE ' + LIVE + ' AND o.created_at >= ' + since +
     ' GROUP BY day ORDER BY day',
   );
@@ -659,6 +663,7 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
       day,
       revenue: r ? Math.round(r.revenue * 1000) / 1000 : 0,
       orders: r ? r.orders : 0,
+      profit: r ? Math.round((r.goods - r.cost) * 1000) / 1000 : 0,
     });
   }
 
