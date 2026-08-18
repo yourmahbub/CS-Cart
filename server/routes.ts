@@ -651,6 +651,7 @@ const allSettings = () => ({
   sliders: getSetting('sliders', []),
   promoBanners: getSetting('promo_banners', {}),
   features: getSetting('features', {}),
+  categoryGrid: getSetting('category_grid', {}),
 });
 
 api.get('/settings', (_req, res) => res.json(allSettings()));
@@ -666,6 +667,7 @@ api.put('/admin/settings', requireAdmin, (req, res) => {
   if (Array.isArray(b.sliders)) setSetting('sliders', b.sliders.slice(0, 30));
   if (b.promoBanners && typeof b.promoBanners === 'object') setSetting('promo_banners', b.promoBanners);
   if (b.features && typeof b.features === 'object') setSetting('features', b.features);
+  if (b.categoryGrid && typeof b.categoryGrid === 'object') setSetting('category_grid', b.categoryGrid);
   res.json(allSettings());
 });
 

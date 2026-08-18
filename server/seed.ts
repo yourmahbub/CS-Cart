@@ -5,7 +5,7 @@ import { mockProducts, mockCategories } from '../src/data/mockData';
 import { megaMenuData } from '../src/data/megaMenuData';
 import { defaultProductTemplate } from '../src/types/template';
 import { defaultProductPageConfig } from '../src/data/productPageDefaults';
-import { defaultPromoBanners, defaultFeatures } from '../src/data/homeSections';
+import { defaultPromoBanners, defaultFeatures, defaultCategoryGrid } from '../src/data/homeSections';
 
 /**
  * First-run bootstrap. Everything here is idempotent: it only fills gaps, so a
@@ -77,6 +77,7 @@ function seedSettings() {
   if (!getSetting('product_page_config', null)) setSetting('product_page_config', defaultProductPageConfig);
   if (!getSetting('promo_banners', null)) setSetting('promo_banners', defaultPromoBanners);
   if (!getSetting('features', null)) setSetting('features', defaultFeatures);
+  if (!getSetting('category_grid', null)) setSetting('category_grid', defaultCategoryGrid);
 
   // Site structure — all editable in the admin, all persisted here.
   if (!getSetting('menu', null)) {

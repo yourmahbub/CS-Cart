@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { api } from '../lib/api';
 import { defaultProductTemplate, PageTemplate } from '../types/template';
 import { defaultProductPageConfig, ProductPageConfig } from '../data/productPageDefaults';
-import { defaultPromoBanners, defaultFeatures, PromoBanners, FeaturesSection } from '../data/homeSections';
+import { defaultPromoBanners, defaultFeatures, defaultCategoryGrid, PromoBanners, FeaturesSection, CategoryGrid } from '../data/homeSections';
 
 export const AdminContext = createContext<any>(null);
 
@@ -102,6 +102,7 @@ export const AdminProvider = ({ children }: { children: React.ReactNode }) => {
       if (Array.isArray(settings.sliders)) setSlidersState(settings.sliders);
       setPromoBannersState(mergeConfig(defaultPromoBanners, settings.promoBanners));
       setFeaturesState(mergeConfig(defaultFeatures, settings.features));
+      setCategoryGridState(mergeConfig(defaultCategoryGrid, settings.categoryGrid));
       writeBootCache({
         categories,
         pages,
@@ -111,6 +112,7 @@ export const AdminProvider = ({ children }: { children: React.ReactNode }) => {
         sliders: settings.sliders,
         promoBanners: settings.promoBanners,
         features: settings.features,
+        categoryGrid: settings.categoryGrid,
       });
       setLoadError(null);
     } catch (err: any) {
@@ -261,6 +263,7 @@ export const AdminProvider = ({ children }: { children: React.ReactNode }) => {
   const [sliders, setSlidersState] = useState<any[]>(() => boot.sliders ?? []);
   const [promoBanners, setPromoBannersState] = useState<PromoBanners>(() => mergeConfig(defaultPromoBanners, boot.promoBanners));
   const [features, setFeaturesState] = useState<FeaturesSection>(() => mergeConfig(defaultFeatures, boot.features));
+  const [categoryGrid, setCategoryGridState] = useState<CategoryGrid>(() => mergeConfig(defaultCategoryGrid, boot.categoryGrid));
 
   const setMenuItems = useCallback((value: Updater<any[]>) => {
     setMenuState((prev) => { const next = resolve(value, prev); queueSave({ menu: next }); return next; });
@@ -280,6 +283,10 @@ export const AdminProvider = ({ children }: { children: React.ReactNode }) => {
 
   const setPromoBanners = useCallback((value: Updater<PromoBanners>) => {
     setPromoBannersState((prev) => { const next = resolve(value, prev); queueSave({ promoBanners: next }); return next; });
+  }, [queueSave]);
+
+  const setCategoryGrid = useCallback((value: Updater<CategoryGrid>) => {
+    setCategoryGridState((prev) => { const next = resolve(value, prev); queueSave({ categoryGrid: next }); return next; });
   }, [queueSave]);
 
   const setFeatures = useCallback((value: Updater<FeaturesSection>) => {
@@ -340,6 +347,7 @@ export const AdminProvider = ({ children }: { children: React.ReactNode }) => {
     homeLayout, setHomeLayout,
     promoBanners, setPromoBanners,
     features, setFeatures,
+    categoryGrid, setCategoryGrid,
     productTemplate, setProductTemplate, resetProductTemplate,
     productPageConfig, setProductPageConfig, resetProductPageConfig,
     recentlyViewed, trackRecentlyViewed,

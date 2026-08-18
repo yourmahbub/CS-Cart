@@ -30,7 +30,7 @@ export default function AdminHomeBuilder() {
   const getEditLink = (type: string) => {
     switch (type) {
       case 'hero_slider': return '/admin/sliders';
-      case 'categories': return '/admin/categories';
+      case 'categories': return '/admin/home-sections?tab=categories';
       case 'featured_products': return '/admin/products';
       case 'popular_products': return '/admin/products';
       case 'promo_banners': return '/admin/home-sections?tab=promo';

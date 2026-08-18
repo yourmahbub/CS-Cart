@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import * as Icons from 'lucide-react';
-import { Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, Sparkles, X } from 'lucide-react';
+import { Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, Sparkles, X, LayoutGrid } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAdmin } from '../../context/AdminContext';
 import { useLang } from '../../context/LanguageContext';
 import { BilingualField } from '../../components/admin/BilingualField';
 import { ImageUpload } from '../../components/admin/ImageUpload';
 import { FEATURE_ICONS, PromoBanner, FeatureItem } from '../../data/homeSections';
+import { CategoryGridEditor } from './CategoryGridEditor';
 
 /**
  * Content editor for the two home-page sections that are not driven by the
@@ -15,12 +16,16 @@ import { FEATURE_ICONS, PromoBanner, FeatureItem } from '../../data/homeSections
  * Reached from Home Layout → Edit Content, which passes ?tab=promo|features.
  */
 export default function AdminHomeSections() {
-  const { promoBanners, setPromoBanners, features, setFeatures, products } = useAdmin();
+  const {
+    promoBanners, setPromoBanners, features, setFeatures,
+    categoryGrid, setCategoryGrid, products, categories,
+  } = useAdmin();
   const { tr } = useLang();
   const [params, setParams] = useSearchParams();
-  const tab = params.get('tab') === 'features' ? 'features' : 'promo';
+  const requested = params.get('tab');
+  const tab = requested === 'features' || requested === 'categories' ? requested : 'promo';
 
-  const setTab = (next: 'promo' | 'features') => setParams({ tab: next }, { replace: true });
+  const setTab = (next: 'promo' | 'features' | 'categories') => setParams({ tab: next }, { replace: true });
 
   return (
     <div className="max-w-5xl mx-auto my-6 flex flex-col gap-6">
@@ -28,11 +33,15 @@ export default function AdminHomeSections() {
         <div className="px-6 sm:px-8 py-6 border-b border-gray-100">
           <h2 className="text-xl font-bold text-gray-900">Home Section Content</h2>
           <p className="text-sm text-gray-500 mt-1">
-            Edit the promo grid banners and the store benefits strip. Everything saves automatically.
+            Edit the promo banners, the category grid and the store benefits strip. Everything saves automatically.
           </p>
         </div>
         <div className="flex gap-2 px-6 sm:px-8 py-4 flex-wrap">
-          {([['promo', 'Promo Banners Grid', ImageIcon], ['features', 'Store Features', Sparkles]] as const).map(([key, label, Icon]) => (
+          {([
+            ['promo', 'Promo Banners Grid', ImageIcon],
+            ['categories', 'Category Grid', LayoutGrid],
+            ['features', 'Store Features', Sparkles],
+          ] as const).map(([key, label, Icon]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
@@ -48,9 +57,11 @@ export default function AdminHomeSections() {
         </div>
       </div>
 
-      {tab === 'promo'
-        ? <PromoEditor value={promoBanners} onChange={setPromoBanners} products={products} tr={tr} />
-        : <FeaturesEditor value={features} onChange={setFeatures} />}
+      {tab === 'promo' && <PromoEditor value={promoBanners} onChange={setPromoBanners} products={products} tr={tr} />}
+      {tab === 'categories' && (
+        <CategoryGridEditor value={categoryGrid} onChange={setCategoryGrid} categories={categories ?? []} tr={tr} />
+      )}
+      {tab === 'features' && <FeaturesEditor value={features} onChange={setFeatures} />}
     </div>
   );
 }
