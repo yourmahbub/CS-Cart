@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../../context/AdminContext';
 import { Store, Phone, DollarSign, Palette, CheckCircle2 } from 'lucide-react';
 import { ImageUpload } from '../../components/admin/ImageUpload';
+import { BilingualField } from '../../components/admin/BilingualField';
 import { DEFAULT_LOGO_HEIGHT, headerTheme } from '../../components/Header';
 import { CURRENCIES, resolveCurrency } from '../../lib/currency';
 
@@ -120,6 +121,16 @@ export default function AdminSettings() {
                      <p className="text-[11px] text-gray-400 mt-1.5">
                         Used as the text logo when no image is uploaded, and in the admin sidebar and footer.
                      </p>
+                  </div>
+                  <div>
+                     <BilingualField
+                        label="Top bar location"
+                        value={formData.locationLabel}
+                        onChange={(v) => update({ locationLabel: v })}
+                        placeholderEn="e.g. Kuwait City"
+                        placeholderAr="مثال: مدينة الكويت"
+                        hint="Shown beside the pin in the thin strip above the header. Leave both sides empty to hide it."
+                     />
                   </div>
                   <div>
                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Support Phone</label>

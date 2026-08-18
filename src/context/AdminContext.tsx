@@ -172,7 +172,7 @@ export const AdminProvider = ({ children }: { children: React.ReactNode }) => {
 
   /* ---------------- products ---------------- */
 
-  const getProduct = useCallback(async (id: number) => {
+  const getProduct = useCallback(async (id: string | number) => {
     const { product } = await api.get<{ product: any }>(`/products/${id}`);
     return product;
   }, []);

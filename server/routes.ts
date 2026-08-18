@@ -104,7 +104,12 @@ api.get('/products', (req, res) => {
 });
 
 api.get('/products/:id', (req, res) => {
-  const row = db.prepare('SELECT * FROM products WHERE id = ?').get(int(req.params.id)) as any;
+  // Accepts either the numeric id or the slug, so the pretty URL the admin
+  // advertises in its search-engine preview actually resolves.
+  const key = String(req.params.id ?? '');
+  const row = (/^[0-9]+$/.test(key)
+    ? db.prepare('SELECT * FROM products WHERE id = ?').get(Number(key))
+    : db.prepare('SELECT * FROM products WHERE slug = ?').get(key)) as any;
   if (!row || !row.published) return res.status(404).json({ error: 'Product not found.' });
 
   const reviews = db

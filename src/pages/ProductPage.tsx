@@ -97,7 +97,7 @@ export function ProductPage() {
   useEffect(() => {
     let cancelled = false;
     setNotFound(false);
-    getProduct(Number(id))
+    getProduct(String(id))
       .then((p: any) => { if (!cancelled) setProduct(p); })
       .catch(() => { if (!cancelled) { setProduct(null); setNotFound(true); } });
     return () => { cancelled = true; };

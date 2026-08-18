@@ -39,7 +39,9 @@ app.use((_req, res, next) => {
         "img-src 'self' data: https:",
         "media-src 'self' https:",
         "font-src 'self' data:",
-        "connect-src 'self' https://nominatim.openstreetmap.org https://ipapi.co",
+        // Nothing calls out to a third party any more; the storefront only
+        // talks to its own API.
+        "connect-src 'self'",
       ].join('; '),
     );
   }

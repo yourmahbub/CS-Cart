@@ -97,7 +97,8 @@ export function Header() {
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
   const [isPhoneOpen, setIsPhoneOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [userLocation, setUserLocation] = useState('Boston');
+  // Shown in the top bar. Set in Settings; hidden when the shop leaves it blank.
+  const storeLocation = tr(siteSettings?.locationLabel);
   const [activeCategoryId, setActiveCategoryId] = useState<string | undefined>(undefined);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -117,49 +118,6 @@ export function Header() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Auto detect location
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const { latitude, longitude } = position.coords;
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-            const data = await res.json();
-            const city = data.address.city || data.address.town || data.address.village || data.address.county || 'Detected Location';
-            if (city) {
-              setUserLocation(city);
-            }
-          } catch (e) {
-            console.error("Geocoding failed", e);
-            // Fallback to IP API if Nominatim fails or rate-limits
-            try {
-              const ipRes = await fetch('https://ipapi.co/json/');
-              const ipData = await ipRes.json();
-              if (ipData.city) {
-                setUserLocation(ipData.city);
-              }
-            } catch (err) {
-               console.error("IP geocoding failed", err);
-            }
-          }
-        },
-        async (err) => {
-          console.error("Geolocation permission denied or failed", err);
-          // Fallback to IP-based location if permission denied
-          try {
-            const ipRes = await fetch('https://ipapi.co/json/');
-            const ipData = await ipRes.json();
-            if (ipData.city) {
-              setUserLocation(ipData.city);
-            }
-          } catch (ipErr) {
-            console.error("IP geocoding failed", ipErr);
-          }
-        }
-      );
-    }
-  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -189,10 +147,12 @@ export function Header() {
       {/* Top Bar */}
       <div className="text-[12px] flex items-center relative z-[60] h-[36px]" style={{ background: theme.topBarBg, color: theme.topBarText }}>
         <div className="max-w-[1600px] w-full mx-auto px-4 flex justify-between items-center">
-          <div className="flex items-center gap-1.5 hover:text-white cursor-pointer transition-colors">
-            <MapPin className="w-3.5 h-3.5" />
-            <span>{userLocation}</span>
-          </div>
+          {storeLocation ? (
+            <div className="flex items-center gap-1.5 transition-colors">
+              <MapPin className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{storeLocation}</span>
+            </div>
+          ) : <span />}
 
           <div className="flex items-center gap-6">
             {/* Main navigation — edited in /admin/menu */}
