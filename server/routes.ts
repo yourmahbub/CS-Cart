@@ -590,32 +590,141 @@ api.get('/admin/customers', requireAdmin, (_req, res) => {
   res.json({ customers: rows });
 });
 
-api.get('/admin/stats', requireAdmin, (_req, res) => {
-  const one = (sql: string) => (db.prepare(sql).get() as any) ?? {};
-  const LIVE = "status NOT IN ('cancelled','failed')";
+/**
+ * Dashboard analytics.
+ *
+ * Everything is aggregated in SQL rather than shipped to the browser, and the
+ * same figures are computed for the window immediately before the one asked
+ * for, so the dashboard can show movement rather than a bare number.
+ *
+ * Cancelled and failed orders are excluded from money; they are still counted
+ * in the status breakdown so the shop can see them.
+ */
+api.get('/admin/stats', requireAdmin, (req, res) => {
+  const one = (sql: string, ...args: any[]) => (db.prepare(sql).get(...args) as any) ?? {};
+  const all = (sql: string, ...args: any[]) => db.prepare(sql).all(...args) as any[];
 
-  // Profit is measured on goods only — shipping and tax are pass-through.
-  const goods = one(`SELECT COALESCE(SUM(subtotal),0) AS n FROM orders WHERE ${LIVE}`).n as number;
-  const cost = one(
-    `SELECT COALESCE(SUM(oi.unit_cost * oi.quantity), 0) AS n
-       FROM order_items oi JOIN orders o ON o.id = oi.order_id
-      WHERE o.${LIVE}`,
-  ).n as number;
-  const profit = Math.round((goods - cost) * 100) / 100;
+  // 0 means "everything so far".
+  const days = Math.min(Math.max(int(req.query.days, 30), 0), 3650);
+  const LIVE = "o.status NOT IN ('cancelled','failed')";
 
-  res.json({
+  // The previous window is the same length immediately before, so a 30-day
+  // view compares against the 30 days before it.
+  const since = days ? "datetime('now', '-" + days + " days')" : "datetime('1970-01-01')";
+  const prevSince = days ? "datetime('now', '-" + days * 2 + " days')" : "datetime('1970-01-01')";
+  const now = "datetime('now', '+1 day')";
+
+  const money = (from: string, to: string) => {
+    const row = one(
+      'SELECT COALESCE(SUM(o.total),0) AS revenue, COALESCE(SUM(o.subtotal),0) AS goods, COUNT(*) AS orders' +
+      '  FROM orders o WHERE ' + LIVE + ' AND o.created_at >= ' + from + ' AND o.created_at < ' + to,
+    );
+    const cost = one(
+      'SELECT COALESCE(SUM(oi.unit_cost * oi.quantity),0) AS n' +
+      '  FROM order_items oi JOIN orders o ON o.id = oi.order_id' +
+      ' WHERE ' + LIVE + ' AND o.created_at >= ' + from + ' AND o.created_at < ' + to,
+    ).n as number;
+    const goods = row.goods as number;
+    const revenue = row.revenue as number;
+    const orders = row.orders as number;
+    const profit = Math.round((goods - cost) * 1000) / 1000;
+    return {
+      revenue: Math.round(revenue * 1000) / 1000,
+      orders,
+      goods,
+      cost: Math.round(cost * 1000) / 1000,
+      profit,
+      margin: goods > 0 ? Math.round((profit / goods) * 1000) / 10 : 0,
+      aov: orders ? Math.round((revenue / orders) * 1000) / 1000 : 0,
+    };
+  };
+
+  const current = money(since, now);
+  const previous = money(prevSince, since);
+
+  // Daily series for the chart. Days with no orders still need a point, so the
+  // gaps are filled here rather than leaving the line to jump across them.
+  const rows = all(
+    'SELECT date(o.created_at) AS day, COALESCE(SUM(o.total),0) AS revenue, COUNT(*) AS orders' +
+    '  FROM orders o WHERE ' + LIVE + ' AND o.created_at >= ' + since +
+    ' GROUP BY day ORDER BY day',
+  );
+  const byDay = new Map(rows.map((r) => [r.day as string, r]));
+  const span = days || 30;
+  const series: any[] = [];
+  for (let i = span - 1; i >= 0; i--) {
+    const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    const r = byDay.get(day);
+    series.push({
+      day,
+      revenue: r ? Math.round(r.revenue * 1000) / 1000 : 0,
+      orders: r ? r.orders : 0,
+    });
+  }
+
+  const statusBreakdown = all(
+    'SELECT status, COUNT(*) AS n, COALESCE(SUM(total),0) AS total FROM orders' +
+    ' WHERE created_at >= ' + since + ' GROUP BY status ORDER BY n DESC',
+  );
+
+  const topProducts = all(
+    'SELECT oi.product_id AS id, oi.title, oi.image, SUM(oi.quantity) AS units,' +
+    '       ROUND(SUM(oi.unit_price * oi.quantity), 3) AS revenue,' +
+    '       ROUND(SUM((oi.unit_price - oi.unit_cost) * oi.quantity), 3) AS profit' +
+    '  FROM order_items oi JOIN orders o ON o.id = oi.order_id' +
+    ' WHERE ' + LIVE + ' AND o.created_at >= ' + since +
+    ' GROUP BY oi.product_id, oi.title ORDER BY revenue DESC LIMIT 8',
+  );
+
+  const lowStock = all(
+    'SELECT id, title, stock, price FROM products WHERE published = 1 AND stock <= 5' +
+    ' ORDER BY stock ASC, title LIMIT 8',
+  );
+
+  const recentOrders = all(
+    'SELECT number, email, status, payment_status, total, created_at FROM orders' +
+    ' ORDER BY created_at DESC LIMIT 6',
+  ).map((o) => ({
+    number: o.number,
+    email: o.email,
+    status: o.status,
+    paymentStatus: o.payment_status,
+    total: o.total,
+    createdAt: o.created_at,
+  }));
+
+  // Things the shop can act on; each maps to a link in the dashboard.
+  const tasks = {
+    pendingOrders: one("SELECT COUNT(*) AS n FROM orders WHERE status IN ('pending','paid','processing')").n,
+    pendingReviews: one("SELECT COUNT(*) AS n FROM reviews WHERE status = 'pending'").n,
+    outOfStock: one('SELECT COUNT(*) AS n FROM products WHERE published = 1 AND stock <= 0').n,
+    withoutCost: one('SELECT COUNT(*) AS n FROM products WHERE cost_price <= 0').n,
+    // unit_cost is snapshotted when the order is placed, so orders taken
+    // before a cost price existed report as pure profit. Surfaced so the
+    // dashboard can say the margin is understated rather than imply it is exact.
+    linesWithoutCost: one(
+      'SELECT COUNT(*) AS n FROM order_items oi JOIN orders o ON o.id = oi.order_id' +
+      ' WHERE ' + LIVE + ' AND o.created_at >= ' + since + ' AND oi.unit_cost <= 0',
+    ).n,
+    unpublished: one('SELECT COUNT(*) AS n FROM products WHERE published = 0').n,
+    // A bilingual storefront quietly falls back to English when Arabic is
+    // missing, so an untranslated catalogue is easy to ship without noticing.
+    withoutArabic: one(
+      "SELECT COUNT(*) AS n FROM products WHERE COALESCE(json_extract(extra, '$.i18n.ar.title'), '') = ''",
+    ).n,
+    categoriesWithoutArabic: one("SELECT COUNT(*) AS n FROM categories WHERE COALESCE(name_ar,'') = ''").n,
+  };
+
+  const totals = {
     orders: one('SELECT COUNT(*) AS n FROM orders').n,
-    revenue: one(`SELECT COALESCE(SUM(total),0) AS n FROM orders WHERE ${LIVE}`).n,
-    goods,
-    cost,
-    profit,
-    margin: goods > 0 ? Math.round((profit / goods) * 1000) / 10 : 0,
     customers: one("SELECT COUNT(*) AS n FROM users WHERE role = 'customer'").n,
     products: one('SELECT COUNT(*) AS n FROM products').n,
-    // How much of the catalogue still has no cost recorded.
-    productsWithoutCost: one('SELECT COUNT(*) AS n FROM products WHERE cost_price <= 0').n,
-    pendingReviews: one("SELECT COUNT(*) AS n FROM reviews WHERE status = 'pending'").n,
-    pendingOrders: one("SELECT COUNT(*) AS n FROM orders WHERE status IN ('pending','paid','processing')").n,
+    categories: one('SELECT COUNT(*) AS n FROM categories').n,
+  };
+
+  res.json({
+    days, current, previous, series, statusBreakdown,
+    topProducts, lowStock, recentOrders, tasks, totals,
   });
 });
 
