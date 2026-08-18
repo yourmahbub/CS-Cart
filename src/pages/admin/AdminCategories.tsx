@@ -3,6 +3,7 @@ import { useAdmin } from '../../context/AdminContext';
 import { Edit, Trash2, Plus, GripVertical, Check, X, Save } from 'lucide-react';
 import { Tooltip } from '../../components/Tooltip';
 import { BilingualField } from '../../components/admin/BilingualField';
+import { ImageUpload } from '../../components/admin/ImageUpload';
 
 export default function AdminCategories() {
   const { categories, addCategory, updateCategory, deleteCategory } = useAdmin();
@@ -79,16 +80,14 @@ export default function AdminCategories() {
                    })
                  }
                />
-               <div>
-                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Image URL</label>
-                 <input
-                   type="text"
-                   className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm outline-none focus:border-[#00a651]"
-                   value={formData.image || ''}
-                   placeholder="https://…"
-                   onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                 />
-               </div>
+               <ImageUpload
+                 label="Category image"
+                 value={formData.image || ''}
+                 onChange={(url) => setFormData({ ...formData, image: url })}
+                 height={110}
+                 previewClass="bg-gray-50"
+                 hint="A square cut-out on a plain background sits best in the grid. PNG, JPG, WEBP or GIF, up to 2 MB. The link button still accepts an external URL."
+               />
                <div>
                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Slug URL</label>
                  <input type="text" className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all" value={formData.slug} onChange={e => setFormData({...formData, slug: e.target.value})} />
