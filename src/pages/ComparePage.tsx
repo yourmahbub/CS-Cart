@@ -9,7 +9,7 @@ export function ComparePage() {
 
   if (compareItems.length === 0) {
     return (
-      <div className="max-w-[1400px] w-full mx-auto px-4 py-16 text-center">
+      <div className="max-w-[1600px] w-full mx-auto px-4 py-16 text-center">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Compare Products</h1>
         <p className="text-gray-500 mb-8 max-w-md mx-auto">You have no products to compare. Return to the shop to add products to your comparison list.</p>
         <Link to="/" className="inline-flex items-center gap-2 text-white bg-[#00a651] px-6 py-3 rounded-xl font-bold hover:bg-[#008c44] transition-colors">
@@ -31,7 +31,7 @@ export function ComparePage() {
   const attributeList = Array.from(allAttributes);
 
   return (
-    <div className="max-w-[1400px] w-full mx-auto px-4 py-8">
+    <div className="max-w-[1600px] w-full mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-8 text-gray-900 border-b border-gray-100 pb-4">
         <h1 className="text-3xl font-bold text-gray-900">Compare Products</h1>
         <span className="text-gray-500 font-medium">{compareItems.length} Products</span>

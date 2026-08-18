@@ -1,10 +1,13 @@
 import React from 'react';
 import { Mail, Phone, MapPin, Send, Facebook, Twitter, Instagram, Youtube } from 'lucide-react';
+import { useAdmin } from '../context/AdminContext';
 
 export function Footer() {
+  const { siteSettings } = useAdmin();
+
   return (
     <footer className="bg-[#1a1a1a] text-gray-300 pt-16 pb-8 text-[14px]">
-      <div className="max-w-[1440px] mx-auto px-4">
+      <div className="max-w-[1600px] mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
           
           {/* Column 1: Store Info */}
@@ -87,7 +90,7 @@ export function Footer() {
 
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-4 text-gray-500">
-          <p>© {new Date().getFullYear()} UniTheme Clone. All Rights Reserved.</p>
+          <p>© {new Date().getFullYear()} {siteSettings?.logoText || "Our Store"}. All rights reserved.</p>
           <div className="flex items-center gap-2 flex-wrap justify-center">
             <span className="text-xs uppercase font-bold tracking-wider mr-2">We Accept:</span>
             <div className="flex gap-2">

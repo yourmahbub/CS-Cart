@@ -27,14 +27,23 @@ export function Hero() {
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      <div className="max-w-[1440px] mx-auto relative group overflow-hidden h-[400px] sm:h-[450px]">
+      <div className="w-full relative group overflow-hidden h-[380px] sm:h-[440px] lg:h-[520px] xl:h-[560px]">
         
         {/* Slides Track */}
         <div 
           className="flex h-full transition-transform duration-700 ease-in-out"
           style={{ transform: `translateX(-${currentSlide * 100}%)` }}
         >
-          {sliders.map((slide: any) => (
+          {sliders.map((slide: any) => {
+            // An image-only slide gets no overlay and no text layer. The dark
+            // wash exists purely to make text legible, so without text it is
+            // just dimming the artwork.
+            const showContent =
+              slide.showContent !== false &&
+              !!(slide.title || slide.subtitle || slide.buttonText);
+            const overlay = showContent ? (slide.overlayOpacity ?? 50) / 100 : 0;
+
+            return (
             <div key={slide.id} className="min-w-full relative h-full flex-shrink-0 cursor-pointer">
               <img 
                 src={slide.image || "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=1600&q=80"} 
@@ -42,18 +51,22 @@ export function Hero() {
                 className="w-full h-full object-cover object-center"
               />
               
-              {/* Dark overlay for contrast */}
-              <div 
-                className="absolute inset-0 bg-black transition-opacity duration-300"
-                style={{ opacity: (slide.overlayOpacity ?? 50) / 100 }}
-              ></div>
+              {/* Dark overlay — only when text sits on top of the image */}
+              {overlay > 0 && (
+                <div
+                  className="absolute inset-0 bg-black transition-opacity duration-300"
+                  style={{ opacity: overlay }}
+                />
+              )}
 
               {/* Hero Text Content */}
-              <div className={`absolute inset-0 flex flex-col justify-center px-8 sm:px-16 md:px-24 ${
-                 slide.align === 'center' ? 'items-center text-center' : 
-                 slide.align === 'right' ? 'items-end text-right' : 
-                 'items-start text-left'
-              }`}>
+              {showContent && (
+              <div className="absolute inset-0 flex items-center">
+                <div className={`w-full max-w-[1600px] mx-auto px-4 sm:px-8 flex flex-col ${
+                   slide.align === 'center' ? 'items-center text-center' :
+                   slide.align === 'right' ? 'items-end text-right' :
+                   'items-start text-left'
+                }`}>
                 <div className={`max-w-xl flex flex-col ${
                    slide.align === 'center' ? 'items-center' : 
                    slide.align === 'right' ? 'items-end' : 
@@ -83,10 +96,13 @@ export function Hero() {
                       <ChevronRight className="w-4 h-4 ml-1 group-hover/btn:translate-x-1 transition-transform" />
                     </Link>
                   )}
+                  </div>
                 </div>
               </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Navigation Arrows */}

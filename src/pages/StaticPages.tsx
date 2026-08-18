@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { MapPin, Phone, Mail, Clock } from 'lucide-react';
+import { api } from '../lib/api';
+import { useLang } from '../context/LanguageContext';
 
 export function DeliveryPage() {
   return (
@@ -120,5 +123,51 @@ export function ContactsPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* CMS page — content managed in /admin/pages                          */
+/* ------------------------------------------------------------------ */
+
+export function CmsPage() {
+  const { slug } = useParams();
+  const { localizePage, dir } = useLang();
+  const [raw, setRaw] = useState<any>(null);
+  const [error, setError] = useState('');
+
+  // Re-localises automatically when the visitor switches language.
+  const page = raw ? localizePage(raw) : null;
+
+  useEffect(() => {
+    setRaw(null);
+    setError('');
+    api.get<{ page: any }>(`/pages/${slug}`)
+      .then((d) => setRaw(d.page))
+      .catch((err) => setError(err?.message ?? 'Page not found.'));
+  }, [slug]);
+
+  useEffect(() => {
+    if (page) document.title = page.title;
+  }, [page]);
+
+  if (error) {
+    return (
+      <main className="max-w-[760px] mx-auto px-4 py-20 text-center">
+        <h1 className="text-2xl font-bold text-gray-900 mb-3">{error}</h1>
+        <Link to="/" className="text-[#0058a3] hover:underline font-medium">Return home</Link>
+      </main>
+    );
+  }
+
+  if (!page) {
+    return <main className="max-w-[760px] mx-auto px-4 py-20 text-center text-gray-500">Loading…</main>;
+  }
+
+  return (
+    <main className="max-w-[760px] mx-auto px-4 py-10" dir={dir}>
+      <h1 className="text-[28px] font-bold text-gray-900 mb-5">{page.title}</h1>
+      <div className="text-[14px] text-gray-700 leading-[1.9] whitespace-pre-line">{page.content}</div>
+    </main>
   );
 }

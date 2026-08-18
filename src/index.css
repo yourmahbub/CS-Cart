@@ -1,1 +1,56 @@
 @import "tailwindcss";
+
+/*
+ * Reserve the scrollbar gutter at all times.
+ *
+ * Without this the page starts short while data loads, has no scrollbar, then
+ * grows once products render — the scrollbar appears, the viewport narrows by
+ * ~15px and every centred element jumps sideways. That sideways jump is the
+ * "shake" people see on reload.
+ */
+html {
+  scrollbar-gutter: stable;
+
+  /*
+   * Guard against sideways scrolling on phones.
+   *
+   * "clip" rather than "hidden": overflow:hidden on the root creates a scroll
+   * container, which silently breaks every position:sticky element on the page
+   * (the header, the product buy-box). "clip" trims the overflow and leaves
+   * sticky working.
+   *
+   * This is a safety net, not a licence — an element wide enough to trigger it
+   * is still a bug worth fixing at the source.
+   */
+  overflow-x: clip;
+  /* Painted before React mounts so there is no white flash on a dark header. */
+  background-color: #ffffff;
+}
+
+/* Keep the footer down the page so short pages don't bounce as content loads. */
+body {
+  min-height: 100vh;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/*
+ * Media placeholders. An <img> with no intrinsic size collapses to zero height
+ * until it decodes, then pushes everything below it down. Giving images a
+ * neutral background means the space is visibly reserved while they load.
+ */
+img {
+  background-color: transparent;
+}
+
+/* Respect users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

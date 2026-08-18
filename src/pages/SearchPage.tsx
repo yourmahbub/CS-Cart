@@ -19,8 +19,8 @@ export function SearchPage() {
 
   // Extract unique brands from mock data
   const availableBrands = useMemo(() => {
-    const brands = products.map((p: any) => p.specs?.Brand || p.title.split(' ')[0]);
-    return Array.from(new Set(brands)).filter(Boolean);
+    const brands = products.map((p: any) => String(p.brand || p.specs?.Brand || p.title.split(' ')[0]));
+    return Array.from(new Set<string>(brands)).filter(Boolean);
   }, [products]);
 
   const results = useMemo(() => {
@@ -57,7 +57,7 @@ export function SearchPage() {
   };
 
   return (
-    <main className="max-w-[1440px] mx-auto px-4 py-8">
+    <main className="max-w-[1600px] mx-auto px-4 py-8">
        <div className="flex items-center gap-2 mb-8">
          <h1 className="text-2xl font-bold text-gray-900">
            {query ? `Search results for "${query}"` : category ? `Browsing Category: ${category}` : "All Products"}

@@ -3,12 +3,13 @@ import { useParams, Link } from 'react-router-dom';
 import { ProductCard } from '../components/ProductCard';
 import { ChevronRight, Filter, Grid, List as ListIcon, LayoutGrid } from 'lucide-react';
 import { useAdmin } from '../context/AdminContext';
+import { useLang } from '../context/LanguageContext';
 
 const CATEGORY_ITEMS = [
   { name: 'Computers, laptops, tablets', image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=300&q=80' },
   { name: 'Car electronics', image: 'https://images.unsplash.com/photo-1601362840469-51e4d8d58785?auto=format&fit=crop&w=300&q=80' },
   { name: 'TVs and multimedia', image: 'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?auto=format&fit=crop&w=300&q=80' },
-  { name: 'Cellphones', image: 'https://images.unsplash.com/photo-1598327105666-5b89351cb31b?auto=format&fit=crop&w=300&q=80' },
+  { name: 'Cellphones', image: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=300&q=80' },
   { name: 'MP3 Players', image: 'https://images.unsplash.com/photo-1614624532983-4ce03382d63d?auto=format&fit=crop&w=300&q=80' },
   { name: 'Photo & Video cameras, accessories', image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=300&q=80' },
   { name: 'Gaming Consoles', image: 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=300&q=80' },
@@ -32,10 +33,11 @@ export function CategoryPage() {
   const title = id ? id.charAt(0).toUpperCase() + id.slice(1).replace(/-/g, ' ') : 'Categories';
   
   const { products } = useAdmin();
+  const { localizeCategory } = useLang();
 
   return (
     <main className="w-full bg-white font-sans">
-      <div className="max-w-[1440px] mx-auto px-4 py-4">
+      <div className="max-w-[1600px] mx-auto px-4 py-4">
         {/* Breadcrumb */}
         <div className="flex items-center text-sm text-gray-500 mb-6 gap-2">
           <Link to="/" className="hover:text-[#00a651] transition-colors">Home</Link>

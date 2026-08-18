@@ -70,7 +70,7 @@ export const megaMenuData = [
       },
       {
         title: 'MP3 Players',
-        image: 'https://images.unsplash.com/photo-1517228122394-2e63dc369cfa?auto=format&fit=crop&w=200&q=80', // Mp3
+        image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=200&q=80', // Mp3
         links: [
           { label: 'iPods' },
           { label: 'Android' },

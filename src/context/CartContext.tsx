@@ -1,178 +1,176 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { api } from '../lib/api';
+import { formatMoney, resolveCurrency } from '../lib/currency';
+import { useLang } from './LanguageContext';
+import { useAdmin } from './AdminContext';
 
-export interface CartItem {
-  product: any;
+export interface CartLine {
+  productId: number;
+  title: string;
+  code: string;
+  image: string;
+  unitPrice: number;
   quantity: number;
+  lineTotal: number;
+  inStock: boolean;
+  color?: string;
+  size?: string;
+  guarantee?: string;
+  servicePlan?: string;
+  options?: Record<string, string | undefined>;
 }
 
-const translations: Record<string, Record<string, string>> = {
-  English: {
-    'Search products': 'Search products',
-    'Categories': 'Categories',
-    'Delivery and payment': 'Delivery and payment',
-    'Returns': 'Returns',
-    'Store locator': 'Store locator',
-    'Contacts': 'Contacts',
-    'Information': 'Information',
-    'In stock': 'In stock',
-    'Add to Cart': 'Add to Cart',
-    'Added to Cart': 'Added to Cart',
-    'Add to Wishlist': 'Add to Wishlist',
-    'Shopping Cart': 'Shopping Cart',
-    'Checkout': 'Checkout',
-    'Product Attributes': 'Product Attributes',
-    'Product not found': 'Product not found',
-    'In demand this week': 'In demand this week',
-    'Promotional offers': 'Promotional offers',
-    'Reviews': 'Reviews',
-  },
-  Spanish: {
-    'Search products': 'Buscar productos',
-    'Categories': 'Categorías',
-    'Delivery and payment': 'Envío y pago',
-    'Returns': 'Devoluciones',
-    'Store locator': 'Ubicación de tiendas',
-    'Contacts': 'Contactos',
-    'Information': 'Información',
-    'In stock': 'En stock',
-    'Add to Cart': 'Añadir al carrito',
-    'Added to Cart': 'Añadido al carrito',
-    'Add to Wishlist': 'Añadir a deseos',
-    'Shopping Cart': 'Carrito de compras',
-    'Checkout': 'Pagar',
-    'Product Attributes': 'Atributos del producto',
-    'Product not found': 'Producto no encontrado',
-    'In demand this week': 'En demanda esta semana',
-    'Promotional offers': 'Ofertas promocionales',
-    'Reviews': 'Reseñas',
-  },
-  French: {
-    'Search products': 'Rechercher des produits',
-    'Categories': 'Catégories',
-    'Delivery and payment': 'Livraison et paiement',
-    'Returns': 'Retours',
-    'Store locator': 'Localisateur',
-    'Contacts': 'Contacts',
-    'Information': 'Information',
-    'In stock': 'En stock',
-    'Add to Cart': 'Ajouter au panier',
-    'Added to Cart': 'Ajouté au panier',
-    'Add to Wishlist': 'Ajouter aux favoris',
-    'Shopping Cart': 'Panier',
-    'Checkout': 'Payer',
-    'Product Attributes': 'Attributs du produit',
-    'Product not found': 'Produit introuvable',
-    'In demand this week': 'En demande cette semaine',
-    'Promotional offers': 'Offres promotionnelles',
-    'Reviews': 'Avis',
-  }
-};
+interface CartTotals {
+  lines: CartLine[];
+  subtotal: number;
+  shipping: number;
+  tax: number;
+  total: number;
+}
 
-const currencyRates: Record<string, { symbol: string, rate: number }> = {
-  '$': { symbol: '$', rate: 1 },
-  '€': { symbol: '€', rate: 0.92 },
-  '£': { symbol: '£', rate: 0.79 },
-};
 
-interface CartContextType {
-  items: CartItem[];
-  addToCart: (product: any, quantity?: number) => void;
-  removeFromCart: (productId: number) => void;
-  updateQuantity: (productId: number, quantity: number) => void;
+interface CartContextType extends CartTotals {
+  addToCart: (product: any, quantity?: number) => Promise<void>;
+  removeFromCart: (index: number) => Promise<void>;
+  updateQuantity: (index: number, quantity: number) => Promise<void>;
+  clearCart: () => Promise<void>;
+  refreshCart: () => Promise<void>;
   cartCount: number;
   cartTotal: number;
-  
-  // Compare State
+  items: { product: any; quantity: number }[];
+  busy: boolean;
+  error: string | null;
+
   compareItems: any[];
   addToCompare: (product: any) => void;
   removeFromCompare: (productId: number) => void;
 
   currency: string;
-  setCurrency: (c: string) => void;
-  language: string;
-  setLanguage: (l: string) => void;
   formatPrice: (price: number) => string;
-  t: (key: string) => string;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+const EMPTY: CartTotals = { lines: [], subtotal: 0, shipping: 0, tax: 0, total: 0 };
+
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
+  const { lang } = useLang();
+  const { siteSettings } = useAdmin();
+  const [cart, setCart] = useState<CartTotals>(EMPTY);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // The store's currency comes from admin settings; shoppers cannot change it,
+  // because the amount charged at checkout is always in this currency.
+  const currency = resolveCurrency(siteSettings?.currency).code;
   const [compareItems, setCompareItems] = useState<any[]>([]);
-  const [currency, setCurrency] = useState('$');
-  const [language, setLanguage] = useState('English');
 
-  const addToCompare = (product: any) => {
-    setCompareItems((current) => {
-      // Don't add if already in compare list
-      if (current.some(item => item.id === product.id)) {
-        return current;
-      }
-      return [...current, product];
-    });
-  };
+  // Guards against overlapping writes clobbering each other.
+  const inFlight = useRef<Promise<void> | null>(null);
 
-  const removeFromCompare = (productId: number) => {
-    setCompareItems(current => current.filter(item => item.id !== productId));
-  };
-
-  const addToCart = (product: any, quantity: number = 1) => {
-    setItems((current) => {
-      // Find existing item by id, and also compare selectedColor and selectedSize if present
-      const existing = current.find(item => 
-        item.product.id === product.id && 
-        item.product.selectedColor === product.selectedColor &&
-        item.product.selectedSize === product.selectedSize
-      );
-      if (existing) {
-        return current.map(item =>
-          item === existing ? { ...item, quantity: item.quantity + quantity } : item
-        );
-      }
-      return [...current, { product, quantity }];
-    });
-  };
-
-  const removeFromCart = (productId: number) => {
-    setItems(current => current.filter(item => item.product.id !== productId));
-  };
-
-  const updateQuantity = (productId: number, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
+  const refreshCart = useCallback(async () => {
+    try {
+      const data = await api.get<CartTotals>('/cart');
+      setCart(data);
+      setError(null);
+    } catch (err: any) {
+      setError(err?.message ?? 'Could not load your cart.');
     }
-    setItems(current =>
-      current.map(item =>
-        item.product.id === productId ? { ...item, quantity } : item
-      )
-    );
-  };
+  }, []);
 
-  const cartCount = items.reduce((total, item) => total + item.quantity, 0);
-  const cartTotal = items.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+  useEffect(() => { refreshCart(); }, [refreshCart]);
 
-  const formatPrice = (price: number) => {
-    const rateData = currencyRates[currency] || currencyRates['$'];
-    const converted = price * rateData.rate;
-    // Format integers consistently
-    if (Number.isInteger(converted)) {
-       return `${rateData.symbol}${converted.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  /** Push the desired line-up to the server, which re-prices authoritatively. */
+  const commit = useCallback(async (lines: CartLine[]) => {
+    const run = async () => {
+      setBusy(true);
+      try {
+        const data = await api.put<CartTotals>('/cart', {
+          items: lines.map((l) => ({
+            productId: l.productId,
+            quantity: l.quantity,
+            color: l.color ?? l.options?.color,
+            size: l.size ?? l.options?.size,
+            guarantee: l.guarantee ?? l.options?.guarantee,
+            servicePlan: l.servicePlan,
+          })),
+        });
+        setCart(data);
+        setError(null);
+      } catch (err: any) {
+        setError(err?.message ?? 'Could not update your cart.');
+        await refreshCart();
+      } finally {
+        setBusy(false);
+      }
+    };
+    const chained = (inFlight.current ?? Promise.resolve()).then(run, run);
+    inFlight.current = chained;
+    return chained;
+  }, [refreshCart]);
+
+  const sameLine = (l: CartLine, p: any) =>
+    l.productId === p.id &&
+    (l.color ?? l.options?.color ?? '') === (p.selectedColor ?? '') &&
+    (l.size ?? l.options?.size ?? '') === (p.selectedSize ?? '') &&
+    (l.servicePlan ?? '') === (p.servicePlanId ?? '');
+
+  const addToCart = async (product: any, quantity = 1) => {
+    const lines = [...cart.lines];
+    const existing = lines.findIndex((l) => sameLine(l, product));
+    if (existing >= 0) {
+      lines[existing] = { ...lines[existing], quantity: lines[existing].quantity + quantity };
+    } else {
+      lines.push({
+        productId: product.id,
+        title: product.title,
+        code: product.code ?? '',
+        image: product.image ?? '',
+        unitPrice: product.price,
+        quantity,
+        lineTotal: product.price * quantity,
+        inStock: product.inStock !== false,
+        color: product.selectedColor,
+        size: product.selectedSize,
+        guarantee: product.guarantee,
+        servicePlan: product.servicePlanId,
+      });
     }
-    return `${rateData.symbol}${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    await commit(lines);
   };
 
-  const t = (key: string) => {
-    return translations[language]?.[key] || translations['English'][key] || key;
+  const removeFromCart = async (index: number) => {
+    await commit(cart.lines.filter((_, i) => i !== index));
   };
+
+  const updateQuantity = async (index: number, quantity: number) => {
+    if (quantity <= 0) return removeFromCart(index);
+    await commit(cart.lines.map((l, i) => (i === index ? { ...l, quantity } : l)));
+  };
+
+  const clearCart = async () => { await commit([]); };
+
+  const addToCompare = (product: any) =>
+    setCompareItems((cur) => (cur.some((i) => i.id === product.id) ? cur : [...cur, product]));
+
+  const removeFromCompare = (productId: number) =>
+    setCompareItems((cur) => cur.filter((i) => i.id !== productId));
+
+  // Prices are stored in the store's currency; nothing is converted here.
+  const formatPrice = (price: number) => formatMoney(price, currency, lang);
+
+  const cartCount = cart.lines.reduce((n, l) => n + l.quantity, 0);
 
   return (
-    <CartContext.Provider value={{
-      items, addToCart, removeFromCart, updateQuantity, cartCount, cartTotal,
-      compareItems, addToCompare, removeFromCompare,
-      currency, setCurrency, language, setLanguage, formatPrice, t
-    }}>
+    <CartContext.Provider
+      value={{
+        ...cart,
+        items: cart.lines.map((l) => ({ product: { ...l, id: l.productId, price: l.unitPrice }, quantity: l.quantity })),
+        addToCart, removeFromCart, updateQuantity, clearCart, refreshCart,
+        cartCount, cartTotal: cart.subtotal, busy, error,
+        compareItems, addToCompare, removeFromCompare,
+        currency, formatPrice,
+      }}
+    >
       {children}
     </CartContext.Provider>
   );
@@ -180,8 +178,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
 export function useCart() {
   const context = useContext(CartContext);
-  if (context === undefined) {
-    throw new Error('useCart must be used within a CartProvider');
-  }
+  if (context === undefined) throw new Error('useCart must be used within a CartProvider');
   return context;
 }

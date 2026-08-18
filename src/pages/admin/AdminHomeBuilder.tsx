@@ -25,12 +25,16 @@ export default function AdminHomeBuilder() {
     setHomeLayout(newLayout);
   };
 
+  // Each section points at whatever actually owns its content. Sections whose
+  // content is not catalogue-driven get the dedicated content editor.
   const getEditLink = (type: string) => {
     switch (type) {
       case 'hero_slider': return '/admin/sliders';
-      case 'categories': return '/admin/products'; // Assume category edit in future
+      case 'categories': return '/admin/categories';
       case 'featured_products': return '/admin/products';
       case 'popular_products': return '/admin/products';
+      case 'promo_banners': return '/admin/home-sections?tab=promo';
+      case 'features': return '/admin/home-sections?tab=features';
       default: return null;
     }
   };

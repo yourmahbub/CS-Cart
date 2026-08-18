@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Heart, Copy, Star, PlayCircle, BarChart2, ShoppingBag, Settings, CalendarDays, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useLang } from '../context/LanguageContext';
 import { Tooltip } from './Tooltip';
 
 export const ProductCard: React.FC<{ product: any }> = ({ product }) => {
-  const { items, addToCart, updateQuantity, formatPrice, t, compareItems, addToCompare, removeFromCompare } = useCart();
+  const { items, addToCart, updateQuantity, formatPrice, compareItems, addToCompare, removeFromCompare } = useCart();
+  const { t, localizeProduct } = useLang();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isAdded, setIsAdded] = useState(false);
 
@@ -254,14 +256,14 @@ export const ProductCard: React.FC<{ product: any }> = ({ product }) => {
           {product.inStock ? t('In stock') : 'On backorder'}
         </div>
 
-        <div className="mt-auto flex flex-row items-end justify-between relative h-[44px]">
-          <div className="flex flex-col">
-            <div className="text-[20px] font-bold text-gray-900 leading-none">
+        <div className="mt-auto flex flex-row items-end justify-between gap-2 relative min-h-[44px]">
+          <div className="flex flex-col min-w-0">
+            <div className="text-[17px] sm:text-[20px] font-bold text-gray-900 leading-tight">
               {formatPrice(product.price)}
             </div>
             {product.oldPrice && (
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="text-[12px] text-gray-400 line-through">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 mt-1">
+                <span className="text-[11px] sm:text-[12px] text-gray-400 line-through">
                   {formatPrice(product.oldPrice)}
                 </span>
                 <span className="px-[6px] py-[1px] text-[11px] font-medium border border-gray-300 text-gray-500 rounded-full leading-none">
