@@ -30,6 +30,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminProducts from './pages/admin/AdminProducts';
 import AdminCategories from './pages/admin/AdminCategories';
 import AdminOrders from './pages/admin/AdminOrders';
+import AdminOrderDetail from './pages/admin/AdminOrderDetail';
 import AdminCustomers from './pages/admin/AdminCustomers';
 import AdminReviews from './pages/admin/AdminReviews';
 import AdminMenu from './pages/admin/AdminMenu';
@@ -53,6 +54,7 @@ function AnimatedRoutes() {
           <Route path="products" element={<AdminProducts />} />
           <Route path="categories" element={<AdminCategories />} />
           <Route path="orders" element={<AdminOrders />} />
+          <Route path="orders/:number" element={<AdminOrderDetail />} />
           <Route path="reviews" element={<AdminReviews />} />
           <Route path="customers" element={<AdminCustomers />} />
           <Route path="home-builder" element={<AdminHomeBuilder />} />

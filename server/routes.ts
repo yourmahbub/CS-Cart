@@ -544,8 +544,29 @@ api.get('/admin/orders', requireAdmin, (_req, res) => {
   });
 });
 
+/** A single order, by numeric id or by the order number shown to the customer. */
+api.get('/admin/orders/:id', requireAdmin, (req, res) => {
+  const key = String(req.params.id ?? '');
+  const order = (/^[0-9]+$/.test(key)
+    ? db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(key))
+    : db.prepare('SELECT * FROM orders WHERE number = ?').get(key)) as any;
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+  const cost = (db
+    .prepare('SELECT COALESCE(SUM(unit_cost * quantity), 0) AS c FROM order_items WHERE order_id = ?')
+    .get(order.id) as any).c as number;
+
+  res.json({ order: { ...withItems(order), cost, profit: Math.round((order.subtotal - cost) * 100) / 100 } });
+});
+
 api.put('/admin/orders/:id', requireAdmin, (req, res) => {
-  const id = int(req.params.id);
+  // Accepts the numeric id or the order number, matching the GET above.
+  const key = String(req.params.id ?? '');
+  const found = (/^[0-9]+$/.test(key)
+    ? db.prepare('SELECT id FROM orders WHERE id = ?').get(Number(key))
+    : db.prepare('SELECT id FROM orders WHERE number = ?').get(key)) as any;
+  if (!found) return res.status(404).json({ error: 'Order not found.' });
+  const id = found.id as number;
   const status = str(req.body?.status, 32);
   const paymentStatus = str(req.body?.paymentStatus, 32);
   const allowed = ['pending', 'paid', 'processing', 'shipped', 'completed', 'cancelled', 'refunded', 'failed'];
