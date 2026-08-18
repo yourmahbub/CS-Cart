@@ -644,28 +644,38 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
 
   // Daily series for the chart. Days with no orders still need a point, so the
   // gaps are filled here rather than leaving the line to jump across them.
-  const rows = all(
-    'SELECT date(o.created_at) AS day, COALESCE(SUM(o.total),0) AS revenue, COUNT(*) AS orders,' +
-    '       COALESCE(SUM(o.subtotal),0) AS goods,' +
-    '       (SELECT COALESCE(SUM(oi.unit_cost * oi.quantity),0) FROM order_items oi' +
-    '         WHERE oi.order_id IN (SELECT id FROM orders o2 WHERE date(o2.created_at) = date(o.created_at)' +
-    "                                 AND o2.status NOT IN ('cancelled','failed'))) AS cost" +
-    '  FROM orders o WHERE ' + LIVE + ' AND o.created_at >= ' + since +
-    ' GROUP BY day ORDER BY day',
-  );
-  const byDay = new Map(rows.map((r) => [r.day as string, r]));
+  // The same shape is built for the window before, so the chart can lay the
+  // previous period underneath as a comparison.
+  const buildSeries = (fromExpr: string, offsetDays: number, length: number) => {
+    const rows = all(
+      'SELECT date(o.created_at) AS day, COALESCE(SUM(o.total),0) AS revenue, COUNT(*) AS orders,' +
+      '       COALESCE(SUM(o.subtotal),0) AS goods,' +
+      '       (SELECT COALESCE(SUM(oi.unit_cost * oi.quantity),0) FROM order_items oi' +
+      '         WHERE oi.order_id IN (SELECT id FROM orders o2 WHERE date(o2.created_at) = date(o.created_at)' +
+      "                                 AND o2.status NOT IN ('cancelled','failed'))) AS cost" +
+      '  FROM orders o WHERE ' + LIVE + ' AND o.created_at >= ' + fromExpr +
+      ' GROUP BY day ORDER BY day',
+    );
+    const byDay = new Map(rows.map((r) => [r.day as string, r]));
+    const out: any[] = [];
+    for (let i = length - 1; i >= 0; i--) {
+      const day = new Date(Date.now() - (i + offsetDays) * 86400000).toISOString().slice(0, 10);
+      const r = byDay.get(day);
+      out.push({
+        day,
+        revenue: r ? Math.round(r.revenue * 1000) / 1000 : 0,
+        orders: r ? r.orders : 0,
+        profit: r ? Math.round((r.goods - r.cost) * 1000) / 1000 : 0,
+        aov: r && r.orders ? Math.round((r.revenue / r.orders) * 1000) / 1000 : 0,
+      });
+    }
+    return out;
+  };
+
   const span = days || 30;
-  const series: any[] = [];
-  for (let i = span - 1; i >= 0; i--) {
-    const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
-    const r = byDay.get(day);
-    series.push({
-      day,
-      revenue: r ? Math.round(r.revenue * 1000) / 1000 : 0,
-      orders: r ? r.orders : 0,
-      profit: r ? Math.round((r.goods - r.cost) * 1000) / 1000 : 0,
-    });
-  }
+  const series = buildSeries(since, 0, span);
+  // Only meaningful when a fixed window was asked for; "all time" has no before.
+  const previousSeries = days ? buildSeries(prevSince, span, span) : [];
 
   const statusBreakdown = all(
     'SELECT status, COUNT(*) AS n, COALESCE(SUM(total),0) AS total FROM orders' +
@@ -728,7 +738,7 @@ api.get('/admin/stats', requireAdmin, (req, res) => {
   };
 
   res.json({
-    days, current, previous, series, statusBreakdown,
+    days, current, previous, series, previousSeries, statusBreakdown,
     topProducts, lowStock, recentOrders, tasks, totals,
   });
 });
