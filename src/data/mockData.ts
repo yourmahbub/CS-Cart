@@ -41,7 +41,6 @@ const baseProducts: any[] = [
     stock: 0,
     hasOptions: false,
     hasVideo: true,
-    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
     isComingSoon: true,
     description: 'Capture stunning 5.3K video and 27MP photos with HyperSmooth 6.0 stabilisation.',
   },
@@ -310,7 +309,6 @@ const baseProducts: any[] = [
     inStock: true,
     stock: 12,
     hasVideo: true,
-    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
     hasOptions: false,
   },
   {
@@ -352,7 +350,6 @@ const baseProducts: any[] = [
     inStock: true,
     stock: 55,
     hasVideo: true,
-    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
     hasOptions: true,
     sizes: ['S', 'M', 'L', 'XL'],
   },
