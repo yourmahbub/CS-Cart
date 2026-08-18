@@ -60,6 +60,11 @@ export function CategoryGridEditor({ value, onChange, categories, tr }: {
           <ColorField label="Caption colour" value={cfg.textColor} onChange={(v) => set({ textColor: v })} />
         </div>
         <SliderField label="Corner rounding" value={cfg.cardRadius} min={0} max={40} suffix="px" onChange={(v) => set({ cardRadius: v })} />
+        <SliderField
+          label="Padding around the picture"
+          value={cfg.cardPadding} min={0} max={40} suffix="px"
+          onChange={(v) => set({ cardPadding: v })}
+        />
         <Toggle label="Show a card border" checked={cfg.showBorder} onChange={(v) => set({ showBorder: v })} />
       </Card>
 
@@ -201,7 +206,7 @@ export function CategoryGridEditor({ value, onChange, categories, tr }: {
             >
               <div
                 className={`min-h-0 flex items-center justify-center ${cfg.labelPosition === 'overlay' ? 'absolute inset-0' : 'flex-1'}`}
-                style={cfg.labelPosition === 'overlay' ? undefined : { padding: 0 }}
+                style={{ padding: Math.round(cfg.cardPadding * 0.6) }}
               >
                 {c.image && (
                   <img
