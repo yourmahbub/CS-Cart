@@ -1,57 +1,26 @@
 @import "tailwindcss";
 
-/*
- * Reserve the scrollbar gutter at all times.
- *
- * Without this the page starts short while data loads, has no scrollbar, then
- * grows once products render — the scrollbar appears, the viewport narrows by
- * ~15px and every centred element jumps sideways. That sideways jump is the
- * "shake" people see on reload.
- */
-html {
-  scrollbar-gutter: stable;
-
-  /*
-   * No overflow-x guard here, deliberately.
-   *
-   * There used to be an "overflow-x: clip" on this element and on body. It was
-   * added while hunting a sideways scroll on phones, and it did stop the
-   * scrollbar — by throwing the overflowing content away. Anything past the
-   * right edge became unreachable rather than scrollable, which reads to a
-   * visitor as the page being cut off, and hid the real cause from us.
-   *
-   * The real cause (a tab row that would not wrap) is fixed, and the layout is
-   * verified clean from 320px to 2560px in both reading directions. So if
-   * something ever does overflow again, it should announce itself with a
-   * scrollbar instead of quietly disappearing.
-   */
-  /* Painted before React mounts so there is no white flash on a dark header. */
-  background-color: #ffffff;
-}
-
-/* Keep the footer down the page so short pages don't bounce as content loads. */
+html,
 body {
-  min-height: 100vh;
+  overflow-x: hidden;
   max-width: 100%;
+  width: 100%;
+  position: relative;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/*
- * Media placeholders. An <img> with no intrinsic size collapses to zero height
- * until it decodes, then pushes everything below it down. Giving images a
- * neutral background means the space is visibly reserved while they load.
- */
-img {
-  background-color: transparent;
+#root {
+  overflow-x: hidden;
+  max-width: 100%;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Respect users who ask for less motion. */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
+*, ::before, ::after {
+  box-sizing: border-box;
 }

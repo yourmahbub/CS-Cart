@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, ShoppingCart, LayoutTemplate, Gem, Mic, Shirt, Dumbbell, PenTool, Gamepad2, List } from 'lucide-react';
 import { useAdmin } from '../context/AdminContext';
-import { useLang } from '../context/LanguageContext';
 import { Link } from 'react-router-dom';
 
 const iconMap: Record<string, React.ElementType> = {
@@ -10,7 +9,6 @@ const iconMap: Record<string, React.ElementType> = {
 
 export function MegaMenu({ closeMenu }: { closeMenu: () => void }) {
   const { megaMenuCategories: megaMenuData } = useAdmin();
-  const { tr } = useLang();
   const [activeCategoryId, setActiveCategoryId] = useState(megaMenuData[0]?.id);
   
   // Ensure we have data
@@ -55,7 +53,7 @@ export function MegaMenu({ closeMenu }: { closeMenu: () => void }) {
               </div>
               <div className="flex-1 pt-1">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <Link to={`/category/${category.id}`} onClick={closeMenu} className={`font-semibold text-[15px] text-gray-900 hover:text-[#00a651] transition-colors`}>{tr(category.title)}</Link>
+                  <Link to={`/category/${category.id}`} onClick={closeMenu} className={`font-semibold text-[15px] text-gray-900 hover:text-[#00a651] transition-colors`}>{category.title}</Link>
                   {category.badge && (
                     <span className={`text-[9px] font-bold text-white px-1.5 py-[2px] rounded ${category.badgeColor || 'bg-gray-700'}`}>
                       {category.badge}
@@ -84,11 +82,11 @@ export function MegaMenu({ closeMenu }: { closeMenu: () => void }) {
                 <div key={idx} className="flex flex-col">
                   {sub.image && (
                     <Link to={`/category/${sub.title.toLowerCase().replace(/\s+/g, '-')}`} onClick={closeMenu} className="h-[90px] flex items-end justify-center mb-5 hover:opacity-80 transition-opacity">
-                      <img src={sub.image} alt={tr(sub.title)} className="max-h-full max-w-full object-contain" />
+                      <img src={sub.image} alt={sub.title} className="max-h-full max-w-full object-contain" />
                     </Link>
                   )}
                   <h4 className="font-bold text-[15px] text-gray-900 mb-3 flex items-center gap-2">
-                    <Link to={`/category/${sub.title.toLowerCase().replace(/\s+/g, '-')}`} onClick={closeMenu} className="hover:text-[#00a651] transition-colors">{tr(sub.title)}</Link>
+                    <Link to={`/category/${sub.title.toLowerCase().replace(/\s+/g, '-')}`} onClick={closeMenu} className="hover:text-[#00a651] transition-colors">{sub.title}</Link>
                     {sub.badge && (
                       <span className="bg-[#ff6200] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm">{sub.badge}</span>
                     )}

@@ -3,52 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <!-- Replace these with your own store details before going live -->
-    <title>Unitheme — Electronics, phones and accessories</title>
-    <meta name="description" content="Shop electronics, smartphones, laptops and accessories with fast delivery, secure payment and a 14-day return policy." />
-    <meta name="theme-color" content="#ff5c00" />
-
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Unitheme" />
-    <meta property="og:title" content="Unitheme — Electronics, phones and accessories" />
-    <meta property="og:description" content="Shop electronics, smartphones, laptops and accessories with fast delivery and secure payment." />
-    <meta name="twitter:card" content="summary_large_image" />
-
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ff5c00'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='18' font-weight='bold' fill='white' text-anchor='middle'%3EU%3C/text%3E%3C/svg%3E" />
-
-    <!--
-      Runs before React mounts. Applies the visitor's saved language direction
-      and header colour to the document immediately, so an Arabic visitor does
-      not see a left-to-right layout flip — and nobody sees a white bar where
-      the dark header will be — once the app hydrates.
-    -->
-    <script>
-      (function () {
-        try {
-          var isAdmin = location.pathname.indexOf('/admin') === 0;
-          var lang = localStorage.getItem(isAdmin ? 'admin_lang' : 'lang');
-          if (lang !== 'ar' && lang !== 'en') lang = 'en';
-          var el = document.documentElement;
-          el.lang = lang;
-          el.dir = lang === 'ar' ? 'rtl' : 'ltr';
-
-          var cached = localStorage.getItem('site_settings_cache');
-          if (cached) {
-            var bg = JSON.parse(cached).headerBg;
-            if (typeof bg === 'string' && bg) {
-              el.style.setProperty('--boot-header-bg', bg);
-            }
-          }
-        } catch (e) {
-          /* private mode, disabled storage, corrupt cache — defaults are fine */
-        }
-      })();
-    </script>
+    <title>UniTheme2 E-commerce Clone</title>
+    <meta name="description" content="A high-fidelity clone of the UniTheme2 e-commerce template, featuring a complex header, detailed product cards, and responsive layout." />
+    <meta property="og:title" content="UniTheme2 E-commerce Clone" />
+    <meta property="og:description" content="A high-fidelity clone of the UniTheme2 e-commerce template, featuring a complex header, detailed product cards, and responsive layout." />
   </head>
   <body>
     <div id="root"></div>
-    <noscript>This store needs JavaScript enabled to work.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

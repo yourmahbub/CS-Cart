@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAdmin } from '../../context/AdminContext';
-import { ImageUpload } from '../../components/admin/ImageUpload';
-import { Edit, Trash2, Plus, GripVertical, Check, X, Upload, Save, ArrowUp, ArrowDown, Layers, Type, Link as LinkIcon, Image as ImageIcon } from 'lucide-react';
+import { Edit, Trash2, Plus, GripVertical, Check, X, Upload, Save, MoveLeft, MoveRight, Layers, Type, Link as LinkIcon, Image as ImageIcon } from 'lucide-react';
 import { Tooltip } from '../../components/Tooltip';
 
 export default function AdminSliders() {
@@ -44,24 +43,16 @@ export default function AdminSliders() {
     setFormData(null);
   };
 
-  /** Moves one slide up or down by a single place. */
-  const moveSlide = (index: number, direction: 'up' | 'down') => {
-    setSlidePosition(index, direction === 'up' ? index : index + 2);
-  };
-
-  /**
-   * Moves a slide to a 1-based position, shifting the rest around it.
-   * The array order is the display order — no separate sort column to keep
-   * in step, so positions can never disagree with what the storefront shows.
-   */
-  const setSlidePosition = (fromIndex: number, position: number) => {
-    const target = Math.min(Math.max(Math.round(position), 1), sliders.length) - 1;
-    if (target === fromIndex) return;
-
-    const next = [...sliders];
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(target, 0, moved);
-    setSliders(next);
+  const moveSlide = (index: number, direction: 'left' | 'right') => {
+    const newIndex = direction === 'left' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= sliders.length) return;
+    
+    const newSliders = [...sliders];
+    const temp = newSliders[index];
+    newSliders[index] = newSliders[newIndex];
+    newSliders[newIndex] = temp;
+    
+    setSliders(newSliders);
   };
 
   if (isEditing !== null) {
@@ -101,72 +92,19 @@ export default function AdminSliders() {
                      <ImageIcon size={18} className="text-[#00a651]" /> Slide Image
                    </div>
                    <div className="space-y-4">
-                     <ImageUpload
-                       label="Desktop image"
-                       value={formData.image || ''}
-                       onChange={(url) => setFormData({ ...formData, image: url })}
-                       height={110}
-                       previewClass="bg-gray-100"
-                       hint="Wide landscape images work best — around 1920×700. PNG, JPG, WEBP or GIF, up to 2 MB."
-                     />
-
-                     <ImageUpload
-                       label="Mobile image (optional)"
-                       value={formData.mobileImage || ''}
-                       onChange={(url) => setFormData({ ...formData, mobileImage: url })}
-                       height={110}
-                       previewClass="bg-gray-100"
-                       hint="A phone-shaped crop, around 800×1000. Without one the desktop image is used — and a wide banner loses most of its width on a narrow screen."
-                     />
-
-                     {/* How the picture fills the frame. A wide banner usually reads
-                         better shown whole than cropped into a phone-shaped box. */}
                      <div>
-                       <label className="block text-sm font-semibold mb-1.5 text-gray-700">Image fit</label>
+                       <label className="block text-sm font-semibold text-gray-700 mb-1.5">Image URL</label>
                        <div className="flex gap-2">
-                         {([['cover', 'Fill frame'], ['contain', 'Show whole image']] as const).map(([mode, label]) => (
-                           <button
-                             key={mode}
-                             type="button"
-                             onClick={() => setFormData({ ...formData, fit: mode })}
-                             className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${
-                               (formData.fit ?? 'cover') === mode
-                                 ? 'bg-[#00a651] text-white border-[#00a651]'
-                                 : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                             }`}
-                           >
-                             {label}
-                           </button>
-                         ))}
+                         <input type="text" placeholder="https://..." className="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all" value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} />
                        </div>
-                       <p className="text-[11px] text-gray-400 mt-1.5">
-                         {(formData.fit ?? 'cover') === 'cover'
-                           ? 'Fills the frame; whatever falls outside is cropped.'
-                           : 'The whole picture stays visible, letterboxed if it does not match the frame.'}
-                       </p>
                      </div>
-
-                     {/* Which part survives the crop. Only meaningful when filling. */}
-                     <div className={(formData.fit ?? 'cover') === 'cover' ? '' : 'opacity-40 pointer-events-none'}>
-                       <label className="block text-sm font-semibold mb-1.5 text-gray-700">Focal point</label>
-                       <div className="grid grid-cols-3 gap-1 w-[108px]">
-                         {[0, 50, 100].map((y) => [0, 50, 100].map((x) => {
-                           const active = (formData.focalX ?? 50) === x && (formData.focalY ?? 50) === y;
-                           return (
-                             <button
-                               key={`${x}-${y}`}
-                               type="button"
-                               aria-label={`Focus ${x}% ${y}%`}
-                               onClick={() => setFormData({ ...formData, focalX: x, focalY: y })}
-                               className={`h-8 rounded-md border transition-colors ${
-                                 active ? 'bg-[#00a651] border-[#00a651]' : 'bg-gray-50 border-gray-200 hover:border-gray-400'
-                               }`}
-                             />
-                           );
-                         }))}
+                     {!formData.image && (
+                       <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-50 transition-colors group">
+                           <Upload size={28} className="text-gray-400 mb-2 group-hover:text-[#00a651] transition-colors" />
+                           <p className="text-sm font-medium text-gray-900">Click to upload or drag & drop</p>
+                           <p className="text-xs text-gray-500 mt-1">SVG, PNG, JPG or GIF (max. 1920x1080px)</p>
                        </div>
-                       <p className="text-[11px] text-gray-400 mt-1.5">The part of the picture kept in view when it has to be cropped.</p>
-                     </div>
+                     )}
                    </div>
                  </div>
 
@@ -174,17 +112,8 @@ export default function AdminSliders() {
                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
                    <div className="flex items-center gap-2 mb-4 text-gray-900 font-bold border-b border-gray-100 pb-3">
                      <Type size={18} className="text-[#00a651]" /> Text Content
-                     <label className="ms-auto flex items-center gap-2 cursor-pointer text-[13px] font-medium text-gray-600">
-                       <input
-                         type="checkbox"
-                         className="w-4 h-4 accent-[#00a651]"
-                         checked={(formData.showContent !== false)}
-                         onChange={(e) => setFormData({ ...formData, showContent: e.target.checked })}
-                       />
-                       Show text &amp; button
-                     </label>
                    </div>
-                   <div className={`space-y-4 transition-opacity ${(formData.showContent !== false) ? '' : 'opacity-40 pointer-events-none'}`}>
+                   <div className="space-y-4">
                      <div>
                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Slide Title</label>
                        <input type="text" className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
@@ -201,7 +130,7 @@ export default function AdminSliders() {
                    <div className="flex items-center gap-2 mb-4 text-gray-900 font-bold border-b border-gray-100 pb-3">
                      <LinkIcon size={18} className="text-[#00a651]" /> Action Button
                    </div>
-                   <div className={`space-y-4 transition-opacity ${(formData.showContent !== false) ? '' : 'opacity-40 pointer-events-none'}`}>
+                   <div className="space-y-4">
                      <div>
                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Button Label</label>
                        <input type="text" className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all" value={formData.buttonText} onChange={e => setFormData({...formData, buttonText: e.target.value})} />
@@ -241,7 +170,7 @@ export default function AdminSliders() {
                        </div>
                      </div>
                      <div>
-                       <label className={`block text-sm font-semibold mb-1.5 flex justify-between ${(formData.showContent !== false) ? 'text-gray-700' : 'text-gray-400'}`}>
+                       <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex justify-between">
                           Overlay Opacity
                           <span className="text-[#00a651]">{formData.overlayOpacity ?? 50}%</span>
                        </label>
@@ -253,11 +182,6 @@ export default function AdminSliders() {
                          onChange={e => setFormData({...formData, overlayOpacity: Number(e.target.value)})}
                          className="w-full accent-[#00a651]"
                        />
-                       {(formData.showContent !== false) ? (
-                         <p className="text-[11px] text-gray-400 mt-1.5">Darkens the image so the text stays readable.</p>
-                       ) : (
-                         <p className="text-[11px] text-gray-400 mt-1.5">Not applied — this slide shows the image only.</p>
-                       )}
                      </div>
                    </div>
                  </div>
@@ -281,10 +205,9 @@ export default function AdminSliders() {
                           )}
                           <div 
                              className="absolute inset-0 bg-black transition-opacity duration-300 z-10" 
-                             style={{ opacity: (formData.showContent !== false) ? (formData.overlayOpacity ?? 50) / 100 : 0 }}
+                             style={{ opacity: (formData.overlayOpacity ?? 50) / 100 }} 
                           />
                           
-                          {(formData.showContent !== false) && (
                           <div className={`relative z-20 h-full flex items-center px-16 lg:px-24 w-full ${
                              formData.align === 'center' ? 'justify-center text-center' : 
                              formData.align === 'right' ? 'justify-end text-right' : 
@@ -317,7 +240,6 @@ export default function AdminSliders() {
                               )}
                             </div>
                           </div>
-                          )}
                         </div>
                      </div>
                   </div>
@@ -364,47 +286,25 @@ export default function AdminSliders() {
                         </div>
                       )}
                       
-                      <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-white/95 backdrop-blur-sm text-gray-900 ps-1.5 pe-2.5 py-1 rounded-lg font-bold shadow-sm border border-black/5">
-                        <span className="w-6 h-6 rounded-md bg-[#00a651] text-white text-[13px] flex items-center justify-center tabular-nums">
-                          {index + 1}
-                        </span>
-                        <span className="text-[11px] uppercase tracking-wide text-gray-500">of {sliders.length}</span>
-                      </div>
+                      <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-gray-900 px-2.5 py-1 text-xs rounded-lg font-bold shadow-sm border border-black/5">Slide {index + 1}</div>
                       
-                      {/* Order controls — always visible, and the number is editable */}
-                      {sliders.length > 1 && (
-                        <div className="absolute bottom-3 left-3 right-3 flex items-center gap-1.5 bg-white/95 backdrop-blur-sm rounded-lg p-1 shadow-sm border border-black/10">
-                          <Tooltip content="Move up" position="top">
-                            <button
-                              onClick={() => moveSlide(index, 'up')}
-                              disabled={index === 0}
-                              aria-label="Move up"
-                              className="p-1.5 rounded hover:bg-gray-100 text-gray-600 disabled:opacity-25 disabled:hover:bg-transparent"
-                            ><ArrowUp size={15} /></button>
-                          </Tooltip>
-
-                          <label className="flex items-center gap-1 flex-1 min-w-0 justify-center">
-                            <span className="sr-only">Position</span>
-                            <input
-                              type="number"
-                              min={1}
-                              max={sliders.length}
-                              value={index + 1}
-                              onChange={(e) => setSlidePosition(index, Number(e.target.value))}
-                              className="w-10 text-center text-[13px] font-bold tabular-nums border border-gray-200 rounded px-1 py-0.5 outline-none focus:border-[#00a651]"
-                            />
-                          </label>
-
-                          <Tooltip content="Move down" position="top">
-                            <button
-                              onClick={() => moveSlide(index, 'down')}
-                              disabled={index === sliders.length - 1}
-                              aria-label="Move down"
-                              className="p-1.5 rounded hover:bg-gray-100 text-gray-600 disabled:opacity-25 disabled:hover:bg-transparent"
-                            ><ArrowDown size={15} /></button>
-                          </Tooltip>
-                        </div>
-                      )}
+                      {/* Left/Right Reordering Controls overlaid on preview image */}
+                      <div className="absolute bottom-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-lg p-1 shadow-sm border border-black/10">
+                        <Tooltip content="Move Left" position="top">
+                          <button 
+                            onClick={() => moveSlide(index, 'left')} 
+                            disabled={index === 0}
+                            className="p-1 rounded hover:bg-gray-200 text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                          ><MoveLeft size={16}/></button>
+                        </Tooltip>
+                        <Tooltip content="Move Right" position="top">
+                          <button 
+                            onClick={() => moveSlide(index, 'right')} 
+                            disabled={index === sliders.length - 1}
+                            className="p-1 rounded hover:bg-gray-200 text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                          ><MoveRight size={16}/></button>
+                        </Tooltip>
+                      </div>
                     </div>
                     
                     {/* Right side editing quick info */}

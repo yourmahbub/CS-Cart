@@ -1,1088 +1,885 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAdmin } from '../context/AdminContext';
-import { useLang } from '../context/LanguageContext';
-import { Stars } from '../components/product/Stars';
-import { ProductGallery, MediaItem } from '../components/product/ProductGallery';
-import { ReviewsSection } from '../components/product/ReviewsSection';
-import { RelatedProducts } from '../components/product/RelatedProducts';
-import {
-  ShoppingCart, Heart, Repeat2, Copy, Check, ChevronDown, ChevronUp, Info,
-  Search as SearchIcon, Clock, Minus, Plus, CheckCircle2, Gift,
-} from 'lucide-react';
+import { ProductCard } from '../components/ProductCard';
+import { ShoppingBag, Star, PlayCircle, Heart, BarChart2, ShieldCheck, Truck, RotateCcw, CheckCircle2, Plus, Minus, ChevronUp, ChevronDown, Check, ChevronRight, Copy, Clock, Filter, ThumbsUp, ThumbsDown, Share, ExternalLink, X, ImagePlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-
-/* ------------------------------------------------------------------ */
-/* Helpers                                                             */
-/* ------------------------------------------------------------------ */
-
-function useCountdown(target: string) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const end = new Date(target).getTime();
-  const diff = Math.max(0, end - now);
-  return {
-    days: Math.floor(diff / 86400000),
-    hours: Math.floor((diff / 3600000) % 24),
-    minutes: Math.floor((diff / 60000) % 60),
-    seconds: Math.floor((diff / 1000) % 60),
-    expired: diff <= 0,
-  };
-}
-
-/** Collapsible sidebar panel used by Delivery / Payment / Warranty. */
-function Panel({ title, children, defaultOpen = true }: any) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="border-t border-gray-200 pt-4 mt-4 first:border-0 first:pt-0 first:mt-0">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center justify-between w-full font-bold text-[13px] text-gray-900 mb-3"
-      >
-        {title}
-        {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            className="overflow-hidden"
-          >
-            {children}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-/** Attribute row with the dotted leader used by the specifications table. */
-function SpecRow({ name, value }: { name: string; value: string }) {
-  return (
-    <div className="flex items-baseline text-[12px] py-[5px]">
-      <span className="text-gray-500 shrink-0">{name}</span>
-      <span className="flex-1 border-b border-dotted border-gray-300 mx-2 translate-y-[-3px]" />
-      <span className="text-gray-900 text-right shrink-0">{value}</span>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Page                                                                */
-/* ------------------------------------------------------------------ */
 
 export function ProductPage() {
   const { id } = useParams();
-  const { addToCart, formatPrice, addToCompare } = useCart();
-  const {
-    products, productTemplate, productPageConfig: cfg,
-    getProduct, submitReview, voteReview, categories, recentlyViewed, trackRecentlyViewed, siteSettings,
-  } = useAdmin();
-
-  const theme = cfg.theme;
-
-  // The list endpoint omits reviews, so the detail record is fetched on its own.
-  const { localizeProduct, tr, isRTL, lang } = useLang();
-  const [rawProduct, setProduct] = useState<any>(null);
-  const product = useMemo(() => localizeProduct(rawProduct), [rawProduct, localizeProduct]);
-  const [notFound, setNotFound] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setNotFound(false);
-    getProduct(String(id))
-      .then((p: any) => { if (!cancelled) setProduct(p); })
-      .catch(() => { if (!cancelled) { setProduct(null); setNotFound(true); } });
-    return () => { cancelled = true; };
-  }, [id, getProduct]);
-
-  /**
-   * Apply the product's SEO fields for the current language.
-   * Note: this runs in the browser, so it helps the tab title and crawlers that
-   * execute JavaScript. Social preview scrapers generally do not — server-side
-   * rendering would be needed for those.
-   */
-  useEffect(() => {
-    if (!product) return;
-    // Fallback order: language-specific meta → language-specific content →
-    // English meta → English content. An Arabic visitor with no Arabic copy
-    // still gets the SEO-tuned English title rather than the raw record title.
-    const arMeta = rawProduct?.i18n?.ar ?? {};
-    const chain = lang === 'ar'
-      ? [arMeta.metaTitle, arMeta.title, rawProduct?.metaTitle, rawProduct?.title]
-      : [rawProduct?.metaTitle, rawProduct?.title];
-    const descChain = lang === 'ar'
-      ? [arMeta.metaDescription, arMeta.description, rawProduct?.metaDescription, rawProduct?.description]
-      : [rawProduct?.metaDescription, rawProduct?.description];
-
-    const firstFilled = (values: any[]) =>
-      values.find((v) => typeof v === 'string' && v.trim()) || '';
-    const metaTitle = firstFilled(chain);
-    const metaDescription = firstFilled(descChain);
-
-    const previousTitle = document.title;
-    document.title = `${metaTitle} | ${siteSettings?.logoText || 'Store'}`;
-
-    let tag = document.querySelector('meta[name="description"]');
-    if (!tag) {
-      tag = document.createElement('meta');
-      tag.setAttribute('name', 'description');
-      document.head.appendChild(tag);
-    }
-    tag.setAttribute('content', String(metaDescription).slice(0, 320));
-
-    return () => { document.title = previousTitle; };
-  }, [product, rawProduct, lang, siteSettings?.logoText]);
-
-  /* ---------------- state ---------------- */
-  const [qty, setQty] = useState(1);
+  const navigate = useNavigate();
+  const { addToCart, formatPrice, t, toggleWishlist, isInWishlist, addToCompare } = useCart();
+  const { products, productTemplate, updateProduct, siteSettings } = useAdmin();
+  const product = products.find((p: any) => p.id === Number(id)) || products[0];
+  
   const [added, setAdded] = useState(false);
-  const [codeCopied, setCodeCopied] = useState(false);
-  const [wishlisted, setWishlisted] = useState(false);
-  const [compared, setCompared] = useState(false);
-  const [showKeyFeatures, setShowKeyFeatures] = useState(false);
-  const [showStickyBar, setShowStickyBar] = useState(false);
-  const buyBoxRef = useRef<HTMLDivElement>(null);
-
-  /* ---------------- media ---------------- */
-  const mediaList = useMemo<MediaItem[]>(() => {
-    if (!product) return [];
-    const list: MediaItem[] = [];
+  const [quantity, setQuantity] = useState(1);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewForm, setReviewForm] = useState<{rating: number; author: string; text: string; media: string[]}>({ rating: 5, author: '', text: '', media: [] });
+  const [selectedReviewMedia, setSelectedReviewMedia] = useState<string | null>(null);
+  const [isReviewLightboxOpen, setIsReviewLightboxOpen] = useState(false);
+  const [simulatedPurchaseComplete, setSimulatedPurchaseComplete] = useState(false);
+  
+  const mediaList = useMemo<{type: 'image'|'video', url: string}[]>(() => {
+    if(!product) return [];
+    const list: {type: 'image'|'video', url: string}[] = [];
     if (product.videoUrl) list.push({ type: 'video', url: product.videoUrl });
-    const imgs = product.images?.length ? product.images : product.image ? [product.image] : [];
-    imgs.forEach((url: string) => list.push({ type: 'image', url }));
+    const images = product.images?.length > 0 ? product.images : (product.image ? [product.image] : []);
+    images.forEach((img: string) => list.push({ type: 'image', url: img }));
     return list;
   }, [product]);
 
-  const [selectedMedia, setSelectedMedia] = useState<MediaItem | undefined>(mediaList[0]);
+  const [selectedMedia, setSelectedMedia] = useState<{type: 'image'|'video', url: string}>(mediaList[0] || { type: 'image', url: product?.image });
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  
+  const variants = useMemo(() => {
+    if (!product?.hasOptions) return [];
 
-  /* ---------------- options ---------------- */
-  // Colours may be stored as plain strings or as {name, hex, image} objects.
-  const colors = useMemo(() => {
-    const raw = product?.colors || [];
-    return raw.map((c: any) =>
-      typeof c === 'string' ? { name: c, hex: '', image: product.image } : { image: product.image, ...c },
-    );
+    const builtVariants = [];
+    
+    if (product.colors && product.colors.length > 0) {
+      builtVariants.push({
+        id: 'color',
+        name: 'Color',
+        options: product.colors.map((c: string) => {
+          const customOpt = (product.colorOptions || []).find((co: any) => co.name?.toLowerCase() === c.trim().toLowerCase());
+          return {
+            label: c,
+            value: c.toLowerCase().replace(/\s+/g, '_'),
+            image: customOpt?.image || product.colorImages?.[c] || product.image,
+            priceModifier: customOpt?.priceModifier || product.variantPricing?.[c] || 0
+          };
+        })
+      });
+    }
+
+    if (product.sizes && product.sizes.length > 0) {
+      builtVariants.push({
+        id: 'size',
+        name: 'Size',
+        options: product.sizes.map((s: string) => {
+          const customOpt = (product.sizeOptions || []).find((so: any) => so.name?.toLowerCase() === s.trim().toLowerCase());
+          return {
+            label: s,
+            value: s.toLowerCase().replace(/\s+/g, '_'),
+            priceModifier: customOpt?.priceModifier || product.variantPricing?.[s] || 0
+          };
+        })
+      });
+    }
+
+    // Remove static fallback completely as requested
+    return builtVariants;
   }, [product]);
 
-  const sizes: string[] = product?.sizes || [];
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    variants.forEach(v => {
+      initial[v.id] = v.options[0].value;
+    });
+    return initial;
+  });
 
-  const [selectedColor, setSelectedColor] = useState<string>('');
-  const [selectedSize, setSelectedSize] = useState<string>('');
-  const [guarantee, setGuarantee] = useState<string>(cfg.guarantee.defaultValue);
-  const [servicePlan, setServicePlan] = useState<string>(cfg.servicePlan.options[0]?.id || 'none');
+  // Calculate dynamic price based on options
+  const currentPriceOptionModifiers = variants.reduce((acc, variant) => {
+    const selectedVal = selectedOptions[variant.id];
+    const opt = variant.options.find(o => o.value === selectedVal);
+    return acc + (opt?.priceModifier || 0);
+  }, 0);
 
-  // Reset all selections whenever the product changes.
+  const displayPrice = product ? product.price + currentPriceOptionModifiers : 0;
+  const displayOldPrice = product?.oldPrice ? product.oldPrice + currentPriceOptionModifiers : undefined;
+
+  // Handle setting initial image and options when product changes
   useEffect(() => {
-    if (!product) return;
-    setSelectedMedia(mediaList[0]);
-    setSelectedColor(product.defaultColor || colors[0]?.name || '');
-    setSelectedSize(product.defaultSize || sizes[0] || '');
-    setGuarantee(cfg.guarantee.defaultValue);
-    setServicePlan(cfg.servicePlan.options[0]?.id || 'none');
-    setQty(1);
+    if (product) setSelectedMedia(mediaList[0] || { type: 'image', url: product.image });
     setAdded(false);
-    trackRecentlyViewed(product.id);
-    window.scrollTo({ top: 0, behavior: 'auto' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product?.id]);
+    
+    // Reset options
+    const initial: Record<string, string> = {};
+    variants.forEach(v => {
+      initial[v.id] = v.options[0].value;
+    });
+    setSelectedOptions(initial);
+  }, [product?.id]); // Safely depend on product.id
 
-  /* ---------------- sticky buy bar ---------------- */
+  const [showStickyCart, setShowStickyCart] = useState(false);
+  const addToCartRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    if (!cfg.buyBox.stickyBarEnabled) return;
-    const onScroll = () => {
-      if (buyBoxRef.current) setShowStickyBar(buyBoxRef.current.getBoundingClientRect().bottom < 0);
+    const handleScroll = () => {
+      if (addToCartRef.current) {
+        const rect = addToCartRef.current.getBoundingClientRect();
+        setShowStickyCart(rect.bottom < 0);
+      }
     };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [cfg.buyBox.stickyBarEnabled]);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    // setTimeout to ensure DOM is ready and rect calculate is correct
+    setTimeout(handleScroll, 100); 
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
-  const countdown = useCountdown(cfg.promo.endDate);
+  const handleOptionSelect = (variantId: string, optionValue: string, optionImage?: string) => {
+    setSelectedOptions(prev => ({ ...prev, [variantId]: optionValue }));
+    if (optionImage) {
+      setSelectedMedia({ type: 'image', url: optionImage });
+    }
+  };
 
   if (!product) {
     return (
-      <div className="max-w-[1600px] mx-auto px-4 py-20 text-center">
-        {notFound ? (
-          <>
-            <h1 className="text-2xl font-bold mb-4">Product not found</h1>
-            <Link to="/" className="hover:underline" style={{ color: theme.primary }}>Return to home</Link>
-          </>
-        ) : (
-          <p className="text-gray-500">Loading…</p>
-        )}
+      <div className="max-w-[1440px] mx-auto px-4 py-20 text-center">
+        <h1 className="text-2xl font-bold mb-4">Product not found</h1>
+        <Link to="/" className="text-[#00a651] hover:underline">Return to Home</Link>
       </div>
     );
   }
 
-  /* ---------------- pricing ---------------- */
-  const planPrice = cfg.servicePlan.enabled
-    ? cfg.servicePlan.options.find((o: any) => o.id === servicePlan)?.price || 0
-    : 0;
-  const unitPrice = product.price + planPrice;
-  const displayPrice = unitPrice;
-  const displayOldPrice = product.oldPrice ? product.oldPrice + planPrice : undefined;
-  const inStock = product.inStock !== false;
-
-  const category = categories.find((c: any) => c.id === product.categoryId);
-
-  /* ---------------- actions ---------------- */
-  const handleAddToCart = async () => {
-    await addToCart(
-      {
-        ...product,
-        price: unitPrice,
-        oldPrice: displayOldPrice,
-        selectedColor,
-        selectedSize,
-        guarantee,
-        servicePlanId: servicePlan,
-      },
-      qty,
-    );
+  const handleAddToCart = () => {
+    addToCart({ ...product, price: displayPrice, oldPrice: displayOldPrice, selectedOptions }, quantity);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
   };
 
-  const handleCopyCode = () => {
-    navigator.clipboard?.writeText(product.code || '').catch(() => {});
-    setCodeCopied(true);
-    setTimeout(() => setCodeCopied(false), 1500);
+  const handleBuyNow = () => {
+    addToCart({ ...product, price: displayPrice, oldPrice: displayOldPrice, selectedOptions }, quantity);
+    navigate('/checkout');
   };
 
-  const handleVote = async (reviewId: number, dir: 'up' | 'down') => {
-    try {
-      const { review } = await voteReview(reviewId, dir);
-      setProduct((prev: any) => ({
-        ...prev,
-        reviewList: (prev.reviewList || []).map((r: any) => (r.id === reviewId ? { ...r, ...review } : r)),
-      }));
-    } catch (err: any) {
-      alert(err?.message ?? 'Could not record your vote.');
+  const handleSubmitReview = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewForm.author.trim() || !reviewForm.text.trim()) return;
+    
+    if (siteSettings.requirePurchaseToReview && !simulatedPurchaseComplete) {
+      alert("You must have purchased this product and the order must be complete to leave a review.");
+      return;
+    }
+
+    const newReview = {
+      id: Date.now(),
+      author: reviewForm.author,
+      rating: reviewForm.rating,
+      text: reviewForm.text,
+      media: reviewForm.media,
+      date: new Date().toLocaleDateString(),
+      status: siteSettings.autoApproveReviews ? 'approved' : 'pending'
+    };
+    
+    // Add some demo reviews if none exist, so the user sees something populated
+    const currentReviews = product.reviewList || [
+       { id: 1, author: 'Alex Johnson', rating: 5, text: 'Great product! Exactly as described.', media: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&h=200&fit=crop'], date: '2023-11-15', status: 'approved' },
+       { id: 2, author: 'Sarah Smith', rating: 4, text: 'Good quality, but shipping took a bit long.', date: '2023-10-02', status: 'approved' }
+    ].slice(0, product.reviews || 0); // show demo reviews only if original reviews count > 0
+
+    const newReviewList = [newReview, ...currentReviews];
+    const approvedReviews = newReviewList.filter(r => r.status === 'approved');
+    const newReviewCount = approvedReviews.length;
+    const newRating = newReviewCount > 0 ? (approvedReviews.reduce((acc: number, r: any) => acc + r.rating, 0) / newReviewCount) : 0;
+
+    updateProduct(product.id, {
+      ...product,
+      reviewList: newReviewList,
+      reviews: newReviewCount,
+      rating: newRating
+    });
+    
+    setIsReviewModalOpen(false);
+    setReviewForm({ rating: 5, author: '', text: '', media: [] });
+    if (!siteSettings.autoApproveReviews) {
+      alert("Your review has been submitted and is pending approval.");
     }
   };
 
-  const handleAddReview = async (review: any) => {
-    const result = await submitReview(product.id, review);
-    if (result.pending) {
-      alert('Thank you! Your review was submitted and is awaiting approval.');
-    } else {
-      // Re-fetch so the aggregate rating and breakdown stay in step with the server.
-      setProduct(await getProduct(product.id));
-    }
+  const handleReviewImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    
+    Array.from(files).forEach((file: File) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setReviewForm(prev => ({
+            ...prev,
+            media: [...prev.media, event.target!.result as string]
+          }));
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
-  /* ------------------------------------------------------------------ */
-  /* Block renderer                                                      */
-  /* ------------------------------------------------------------------ */
+  const template = product.pageTemplateOverride || productTemplate;
 
   const renderBlock = (block: any) => {
     if (!block.enabled) return null;
-    const s = block.settings || {};
-    if (s.visibilityRule === 'low_stock' && (product.stock ?? 99) >= 10) return null;
-    if (s.visibilityRule === 'has_discount' && !product.discount) return null;
-    if (s.visibilityRule === 'in_stock' && !inStock) return null;
-    if (s.visibilityRule === 'out_of_stock' && inStock) return null;
-
-    switch (block.type) {
-      /* ---------------- media ---------------- */
+    if (block.settings?.visibilityRule === 'low_stock' && product.stock >= 10) return null;
+    if (block.settings?.visibilityRule === 'has_discount' && !product.discount) return null;
+    
+    switch(block.type) {
       case 'gallery':
         return (
-          <div key={block.id} className="mb-6">
-            <ProductGallery
-              product={product}
-              media={mediaList}
-              selected={selectedMedia}
-              onSelect={setSelectedMedia}
-              config={cfg}
-            />
+          <div key={block.id} className="flex flex-col relative w-full mb-6">
+            <div className="absolute top-4 left-4 z-10 flex flex-col gap-1.5 items-start">
+               {product.discount && (
+                 <span className="bg-[#eb5a1b] text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm select-none pointer-events-none">
+                   -{product.discount}%
+                 </span>
+               )}
+            </div>
+            <div className="w-full flex-1 flex items-center justify-center relative pb-8 mb-4 bg-white min-h-[300px] cursor-pointer group" onClick={() => setIsLightboxOpen(true)}>
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors z-10 flex items-center justify-center pointer-events-none rounded-2xl">
+                <div className="bg-white/90 backdrop-blur scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all text-gray-900 rounded-full px-4 py-2 font-medium text-sm shadow-sm flex items-center gap-2">
+                  <PlayCircle className="w-4 h-4 hidden group-hover:block" /> Click to enlarge
+                </div>
+              </div>
+              <AnimatePresence mode="wait">
+                {selectedMedia.type === 'video' ? (
+                   <motion.video
+                     key={selectedMedia.url}
+                     initial={{ opacity: 0, scale: 0.95 }}
+                     animate={{ opacity: 1, scale: 1 }}
+                     exit={{ opacity: 0, scale: 1.05 }}
+                     transition={{ duration: 0.2 }}
+                     src={selectedMedia.url}
+                     autoPlay muted loop playsInline
+                     className="w-full h-full max-h-[400px] object-contain relative z-0"
+                   />
+                ) : (
+                  <motion.img 
+                    key={selectedMedia.url}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 1.05 }}
+                    transition={{ duration: 0.2 }}
+                    src={selectedMedia.url || undefined} 
+                    alt={product.title} 
+                    className="w-full h-full max-h-[400px] object-contain mix-blend-multiply relative z-0" 
+                  />
+                )}
+              </AnimatePresence>
+            </div>
+            <div className="flex gap-3 justify-center pb-2 flex-wrap px-4">
+              {mediaList.map((media, i) => (
+                <div 
+                  key={i} 
+                  onClick={() => setSelectedMedia(media)}
+                  className={`w-[60px] h-[60px] flex-shrink-0 border rounded-[8px] p-1.5 cursor-pointer transition-colors relative ${selectedMedia.url === media.url ? 'border-gray-500 ring-1 ring-gray-300' : 'border-gray-200 hover:border-gray-300'}`}
+                >
+                  {media.type === 'video' ? (
+                    <>
+                      <video src={media.url} className="w-full h-full object-cover rounded-[6px]" />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/10 rounded-[8px]"><PlayCircle className="w-6 h-6 text-white bg-black/50 rounded-full" /></div>
+                    </>
+                  ) : <img src={media.url || undefined} className="w-full h-full object-contain mix-blend-multiply" />}
+                </div>
+              ))}
+            </div>
           </div>
         );
-
-      /* ---------------- title ---------------- */
       case 'title_price':
         return (
-          <div key={block.id} className="mb-5">
-            <h1 className="text-[19px] sm:text-[21px] font-bold text-gray-900 leading-[1.35] mb-2.5">
-              {product.title}
-            </h1>
-            <div className="flex items-center flex-wrap gap-x-3 gap-y-1.5 mb-2">
-              {cfg.titleBlock.showRating && (
-                <span className="flex items-center gap-1.5">
-                  <Stars value={product.rating || 0} size={13} color={theme.star} />
-                  <span className="text-[12px] font-bold text-gray-900">{(product.rating || 0).toFixed(1)}</span>
-                </span>
-              )}
-              {cfg.titleBlock.showReviewCount && (
-                <a href="#reviews" className="text-[12px] hover:underline" style={{ color: theme.link }}>
-                  Reviews: {product.reviews || 0}
-                </a>
-              )}
-              {cfg.titleBlock.showWriteReview && (
-                <a href="#reviews" className="text-[12px] hover:underline" style={{ color: theme.link }}>
-                  {cfg.titleBlock.writeReviewLabel}
-                </a>
-              )}
+          <div key={block.id} className="mb-6">
+            <h1 className="text-[26px] sm:text-[28px] font-bold text-gray-900 leading-[1.25] mb-3">{product.title}</h1>
+            <div className="flex items-center flex-wrap gap-x-4 gap-y-2">
+               <div className="flex items-center gap-1.5">
+                 <div className="flex items-center gap-0.5">
+                    {[1,2,3,4,5].map(i => <Star key={i} className={`w-[14px] h-[14px] ${i <= Math.floor(product.rating || 0) ? 'fill-[#ff5c00] text-[#ff5c00]' : 'fill-[#ff5c00]/20 text-[#ff5c00]/20'} ${i === 5 ? 'w-[7px] overflow-hidden' : ''}`} />)}
+                 </div>
+                 <span className="text-[14px] font-bold text-gray-900 ml-1">{product.rating ? ((product.rating % 1 === 0) ? product.rating.toFixed(1) : product.rating) : '0.0'}</span>
+               </div>
+               <span className="text-[14px] text-[#0058a3] hover:underline cursor-pointer">Reviews: {product.reviews || 0}</span>
+               <div className="text-[13px] text-gray-500 ml-auto flex items-center gap-1.5">CODE: <Copy className="w-4 h-4 text-gray-400"/> <span className="font-mono text-gray-900 ml-0.5">{product.code || 'N/A'}</span></div>
             </div>
-            {cfg.titleBlock.showCode && product.code && (
-              <div className="text-[12px] text-gray-500 flex items-center gap-1.5">
-                {cfg.titleBlock.codeLabel}
-                {cfg.titleBlock.showCopyCode && (
-                  <button onClick={handleCopyCode} className="text-gray-400 hover:text-gray-700" title="Copy code">
-                    {codeCopied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                )}
-                <span className="text-gray-900">{product.code}</span>
-              </div>
-            )}
           </div>
         );
-
       case 'short_description':
         return product.shortNote ? (
-          <div
-            key={block.id}
-            className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold w-fit"
-            style={{ background: `${theme.primary}14`, color: theme.primary }}
-          >
-            {product.shortNote}
+          <div key={block.id} className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-[#00a651] rounded-full text-[13px] font-bold border border-green-100 w-fit">
+             <Star className="w-3.5 h-3.5 fill-current" /> {product.shortNote}
           </div>
         ) : null;
-
-      /* ---------------- options ---------------- */
-      case 'variants': {
-        if (!cfg.variants.enabled) return null;
-        if (colors.length === 0 && sizes.length === 0) return null;
-        return (
-          <div key={block.id} className="flex flex-col mb-5">
-            {colors.length > 0 && (
-              <div className="mb-5">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className="font-bold text-[12.5px] text-gray-900">{cfg.variants.colorLabel}:</span>
-                  {cfg.variants.showSelectedName && (
-                    <span className="text-[12.5px] text-gray-600">{selectedColor}</span>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2.5">
-                  {colors.map((c: any) => {
-                    const active = selectedColor === c.name;
-                    return (
-                      <button
-                        key={c.name}
-                        onClick={() => {
-                          setSelectedColor(c.name);
-                          if (c.image) setSelectedMedia({ type: 'image', url: c.image });
-                        }}
-                        className="flex flex-col items-center gap-1 w-[62px] group relative"
-                        title={c.name}
-                      >
-                        <span
-                          className={`w-[54px] h-[54px] rounded-[8px] border p-1 flex items-center justify-center bg-white transition-all ${
-                            active ? 'border-2' : 'border-gray-200 group-hover:border-gray-400'
-                          }`}
-                          style={active ? { borderColor: theme.primary } : undefined}
-                        >
-                          {c.image ? (
-                            <img src={c.image} alt={c.name} className="w-full h-full object-contain mix-blend-multiply" />
-                          ) : (
-                            <span className="w-full h-full rounded-[5px]" style={{ background: c.hex || '#e5e7eb' }} />
-                          )}
-                        </span>
-                        <span className={`text-[10px] leading-tight text-center ${active ? 'text-gray-900 font-semibold' : 'text-gray-500'}`}>
-                          {c.name}
-                        </span>
-                        {active && (
-                          <CheckCircle2
-                            className="absolute -top-1 -right-0.5 w-[16px] h-[16px] bg-white rounded-full"
-                            style={{ color: theme.primary }}
-                          />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {sizes.length > 0 && (
-              <div>
-                <div className="font-bold text-[12.5px] text-gray-900 mb-2">
-                  {product.sizeLabel || cfg.variants.sizeLabel}:
+      case 'warranty':
+        return product.hasWarranty !== false ? (
+          <div key={block.id} className="bg-[#f2f4f8] rounded-[10px] p-4 mb-6">
+             <div className="flex items-center font-bold text-[13px] text-gray-900 mb-2 gap-2"><Clock className="w-[18px] h-[18px]" /> {product.warranty ? "WARRANTY INFORMATION" : "14-DAY RETURN PERIOD"}</div>
+             <p className="text-[12px] text-gray-600 mb-1 leading-relaxed pl-[26px]">{product.warranty || "All items with carrier network plans have a 14-day return period."}<br/><span className="text-[#0058a3] hover:underline cursor-pointer inline-flex mt-1">Learn more &gt;</span></p>
+          </div>
+        ) : null;
+      case 'variants':
+        return variants.length > 0 ? (
+          <div key={block.id} className="flex flex-col mb-4">
+            {variants.map(variant => (
+              <div key={variant.id} className="mb-5 last:mb-0">
+                <div className="flex items-center gap-2 mb-2 w-full pr-1">
+                  <span className="font-bold text-[13px] text-gray-900">{variant.name}:</span>
+                  <span className="text-[13px] text-gray-700">{selectedOptions[variant.id]}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {sizes.map((sz) => {
-                    const active = selectedSize === sz;
-                    return (
-                      <button
-                        key={sz}
-                        onClick={() => setSelectedSize(sz)}
-                        className={`px-4 py-1.5 rounded-[6px] text-[12.5px] font-medium transition-all border ${
-                          active ? 'border-2 text-gray-900 font-bold' : 'border-gray-200 text-gray-600 hover:border-gray-400'
-                        }`}
-                        style={active ? { borderColor: theme.primary } : undefined}
-                      >
-                        {sz}
-                      </button>
-                    );
+                  {variant.options.map(opt => {
+                    const isSelected = selectedOptions[variant.id] === opt.value;
+                    if (variant.id === 'color') {
+                      return (
+                        <div key={opt.value} onClick={() => handleOptionSelect(variant.id, opt.value, opt.image)} className={`w-[60px] cursor-pointer flex flex-col items-center gap-1 group relative`}>
+                           <div className={`w-[56px] h-[56px] border rounded-[8px] p-1 flex items-center justify-center transition-all ${isSelected ? 'border-[#00a651] ring-1 ring-[#00a651]' : 'border-gray-200 group-hover:border-gray-400 group-hover:shadow-sm'}`}>
+                              <img src={opt.image || undefined} className="w-full h-full object-contain mix-blend-multiply" />
+                           </div>
+                           {isSelected && <div className="absolute top-[-4px] right-[0px] bg-white rounded-full shadow-sm"><CheckCircle2 className="w-[18px] h-[18px] text-[#00a651] fill-white" strokeWidth={2} /></div>}
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div key={opt.value} onClick={() => handleOptionSelect(variant.id, opt.value)} className={`relative cursor-pointer transition-all border rounded-[8px] px-4 py-2 flex items-center justify-center min-w-[70px] ${isSelected ? 'border-[#00a651] border-2 bg-green-50/30' : 'border-gray-200 hover:border-gray-400 bg-white hover:bg-gray-50'}`}>
+                           <span className={`text-[13px] font-semibold ${isSelected ? 'text-[#00a651]' : 'text-gray-700'}`}>{opt.label}</span>
+                        </div>
+                      );
+                    }
                   })}
                 </div>
               </div>
-            )}
+            ))}
           </div>
-        );
-      }
-
-      case 'guarantee_select':
-        if (!cfg.guarantee.enabled || cfg.guarantee.options.length === 0) return null;
-        return (
-          <div key={block.id} className="mb-5">
-            <div className="font-bold text-[12.5px] text-gray-900 mb-2">{cfg.guarantee.label}</div>
-            <div className="relative">
-              <select
-                value={guarantee}
-                onChange={(e) => setGuarantee(e.target.value)}
-                className="w-full appearance-none border border-gray-200 rounded-[8px] px-3.5 py-2.5 text-[12.5px] text-gray-800 bg-white outline-none focus:border-gray-400 cursor-pointer"
-              >
-                {cfg.guarantee.options.map((o: string) => <option key={o}>{o}</option>)}
-              </select>
-              <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-        );
-
-      case 'service_plan': {
-        if (!cfg.servicePlan.enabled || cfg.servicePlan.options.length === 0) return null;
-        return (
-          <div key={block.id} className="mb-5">
-            <div className="flex items-center gap-1.5 mb-2.5">
-              <span className="font-bold text-[12.5px] text-gray-900">{cfg.servicePlan.title}</span>
-              {cfg.servicePlan.tooltip && (
-                <span className="group relative">
-                  <Info className="w-3.5 h-3.5 text-gray-400 cursor-help" />
-                  <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 bg-gray-900 text-white text-[11px] rounded-lg p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20 leading-relaxed">
-                    {cfg.servicePlan.tooltip}
-                  </span>
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col gap-2 mb-2.5">
-              {cfg.servicePlan.options.map((o: any) => (
-                <label key={o.id} className="flex items-center gap-2.5 cursor-pointer group">
-                  <input
-                    type="radio"
-                    name="service-plan"
-                    checked={servicePlan === o.id}
-                    onChange={() => setServicePlan(o.id)}
-                    className="w-4 h-4 border-gray-300"
-                    style={{ accentColor: theme.primary }}
-                  />
-                  <span className="text-[12.5px] text-gray-700 group-hover:text-gray-900">
-                    {o.label}
-                    {o.price > 0 && <span className="text-gray-500"> (+{formatPrice(o.price)})</span>}
-                  </span>
-                </label>
-              ))}
-            </div>
-            {cfg.servicePlan.note && (
-              <p className="text-[11px] text-gray-400 leading-relaxed">{cfg.servicePlan.note}</p>
-            )}
-          </div>
-        );
-      }
-
-      /* ---------------- sidebar ---------------- */
-      case 'brand_logo':
-        if (!cfg.brand.enabled || !cfg.brand.showLogo) return null;
-        if (!product.brandLogo && !product.brand) return null;
-        return (
-          <div key={block.id} className="flex justify-end mb-3">
-            {product.brandLogo ? (
-              <img src={product.brandLogo} alt={product.brand} className="h-8 object-contain opacity-90" />
-            ) : (
-              <span className="text-[13px] font-semibold text-gray-500">{product.brand}</span>
-            )}
-          </div>
-        );
-
-      case 'price_box':
-        return (
-          <div key={block.id} className="mb-4">
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-[27px] font-bold text-gray-900 leading-none">{formatPrice(displayPrice)}</span>
-            </div>
-            <div className="flex items-center gap-2 mt-1.5">
-              {cfg.priceBox.showOldPrice && displayOldPrice && (
-                <span className="text-[13px] text-gray-400 line-through">{formatPrice(displayOldPrice)}</span>
-              )}
-              {cfg.priceBox.showDiscountBadge && product.discount ? (
-                <span className="text-[10px] text-gray-500 border border-gray-300 rounded-full px-1.5 py-[1px]">
-                  -{product.discount}%
-                </span>
-              ) : null}
-            </div>
-            {cfg.priceBox.showStockStatus && (
-              <div
-                className="text-[12.5px] font-medium mt-2"
-                style={{ color: inStock ? '#00a651' : '#9ca3af' }}
-              >
-                {inStock ? cfg.priceBox.inStockLabel : cfg.priceBox.outOfStockLabel}
-              </div>
-            )}
-          </div>
-        );
-
-      case 'promo_deal': {
-        if (!cfg.promo.enabled) return null;
-        if (cfg.promo.showCountdown && countdown.expired) return null;
-        return (
-          <div
-            key={block.id}
-            className="rounded-[10px] p-3.5 mb-4"
-            style={{
-              background: `linear-gradient(135deg, ${cfg.promo.gradientFrom}, ${cfg.promo.gradientTo})`,
-              color: cfg.promo.textColor,
-            }}
-          >
-            <div className="flex items-start gap-2 mb-2.5">
-              <Gift className="w-4 h-4 shrink-0 mt-[1px]" />
-              <span className="text-[12px] font-bold leading-snug">{cfg.promo.title}</span>
-            </div>
-
-            {cfg.promo.showCountdown && (
-              <>
-                {cfg.promo.subtitle && <div className="text-[10.5px] opacity-90 mb-1.5">{cfg.promo.subtitle}</div>}
-                <div className="flex gap-1.5 mb-2.5">
-                  {[
-                    { v: countdown.days, l: 'days' },
-                    { v: countdown.hours, l: 'hours' },
-                    { v: countdown.minutes, l: 'minutes' },
-                    { v: countdown.seconds, l: 'seconds' },
-                  ].map((u) => (
-                    <div key={u.l} className="flex flex-col items-center bg-white/20 rounded-[6px] px-2 py-1 min-w-[42px]">
-                      <span className="text-[15px] font-bold leading-none">{String(u.v).padStart(2, '0')}</span>
-                      <span className="text-[8.5px] opacity-80 mt-0.5">{u.l}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {cfg.promo.linkText && (
-              <a href={cfg.promo.linkUrl} className="text-[11px] underline opacity-90 hover:opacity-100 inline-flex items-center gap-1">
-                {cfg.promo.linkText}
-                <ChevronDown className="w-3 h-3" />
-              </a>
-            )}
-          </div>
-        );
-      }
-
+        ) : null;
       case 'add_to_cart':
         return (
-          <div key={block.id} ref={buyBoxRef} className="mb-4">
-            <div className="flex items-stretch gap-2 mb-2.5 h-[42px]">
-              {cfg.buyBox.showQuantity && (
-                <div className="flex items-center border border-gray-200 rounded-[8px] w-[92px] justify-between px-1 shrink-0">
-                  <button
-                    onClick={() => setQty(Math.max(cfg.buyBox.minQty, qty - 1))}
-                    className="w-7 h-full flex items-center justify-center text-gray-500 hover:text-gray-900"
-                    aria-label="Decrease quantity"
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
-                  <input
-                    value={qty}
-                    onChange={(e) => {
-                      const n = parseInt(e.target.value, 10);
-                      if (!isNaN(n)) setQty(Math.min(cfg.buyBox.maxQty, Math.max(cfg.buyBox.minQty, n)));
-                    }}
-                    className="w-8 text-center font-bold text-[13px] text-gray-900 outline-none bg-transparent"
-                  />
-                  <button
-                    onClick={() => setQty(Math.min(cfg.buyBox.maxQty, qty + 1))}
-                    className="w-7 h-full flex items-center justify-center text-gray-500 hover:text-gray-900"
-                    aria-label="Increase quantity"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
+          <div key={block.id} className="bg-white border border-gray-200 rounded-[12px] p-6 shadow-sm relative pt-7 mb-6">
+             <div className="flex justify-between items-start mb-6">
+                <div>
+                   <div className="flex items-baseline gap-2 mb-1">
+                      <span className="text-[32px] font-bold text-gray-900 leading-none">${displayPrice}</span>
+                      {displayOldPrice && <span className="text-[14px] text-gray-500 line-through leading-none">${displayOldPrice}</span>}
+                      {product.discount && <span className="border border-gray-300 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-gray-600 bg-white ml-1 align-middle">-{product.discount}%</span>}
+                   </div>
                 </div>
-              )}
-              <button
-                onClick={handleAddToCart}
-                disabled={!inStock}
-                className="flex-1 text-white rounded-[8px] font-bold text-[13px] flex items-center justify-center gap-2 transition-all disabled:opacity-40 hover:brightness-95"
-                style={{ background: added ? '#00a651' : theme.primary }}
-              >
-                {added ? <Check className="w-4 h-4" strokeWidth={3} /> : <ShoppingCart className="w-4 h-4" />}
-                {added ? cfg.buyBox.addedLabel : cfg.buyBox.addToCartLabel}
-              </button>
-            </div>
-
-            {cfg.buyBox.showOneClick && (
-              <button
-                onClick={handleAddToCart}
-                disabled={!inStock}
-                className="w-full h-[40px] rounded-[8px] border-2 font-bold text-[13px] transition-colors hover:bg-orange-50 disabled:opacity-40 mb-3"
-                style={{ borderColor: theme.primary, color: theme.primary }}
-              >
-                {cfg.buyBox.oneClickLabel}
-              </button>
-            )}
-
-            <div className="flex items-center gap-4">
-              {cfg.buyBox.showWishlist && (
-                <button
-                  onClick={() => setWishlisted(!wishlisted)}
-                  className="flex items-center gap-1.5 text-[12px] text-gray-500 hover:text-gray-900 transition-colors"
-                >
-                  <Heart className={`w-4 h-4 ${wishlisted ? 'fill-red-500 text-red-500' : ''}`} />
-                  {cfg.buyBox.wishlistLabel}
-                </button>
-              )}
-              {cfg.buyBox.showCompare && (
-                <button
-                  onClick={() => { addToCompare(product); setCompared(true); }}
-                  className="flex items-center gap-1.5 text-[12px] text-gray-500 hover:text-gray-900 transition-colors"
-                >
-                  <Repeat2 className={`w-4 h-4 ${compared ? 'text-[#0058a3]' : ''}`} />
-                  {cfg.buyBox.compareLabel}
-                </button>
-              )}
-            </div>
-          </div>
-        );
-
-      case 'delivery_options': {
-        if (!cfg.delivery.enabled) return null;
-        const methods = cfg.delivery.methods.filter((m: any) => m.enabled);
-        if (methods.length === 0) return null;
-        return (
-          <Panel key={block.id} title={cfg.delivery.title} defaultOpen={!cfg.delivery.collapsedByDefault}>
-            <div className="flex flex-col gap-3.5">
-              {methods.map((m: any) => (
-                <div key={m.id} className="flex items-start gap-2.5">
-                  <span
-                    className="w-8 h-8 rounded-[6px] shrink-0 flex items-center justify-center overflow-hidden text-[15px]"
-                    style={{ background: m.iconBg }}
-                  >
-                    {m.icon?.startsWith('http') ? (
-                      <img src={m.icon} alt="" className="w-full h-full object-contain p-1" />
-                    ) : (
-                      m.icon
-                    )}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-[12px] text-gray-900">
-                        <span className="font-semibold">{m.name}</span>
-                        {m.tag && <span className="text-gray-500"> - {m.tag}</span>}
-                      </span>
-                      <span
-                        className="text-[11.5px] shrink-0 flex items-center gap-1"
-                        style={{ color: m.priceIsFree ? '#00a651' : '#6b7280' }}
-                      >
-                        {m.price}
-                        {!m.priceIsFree && <Info className="w-3 h-3 text-gray-300" />}
-                      </span>
-                    </div>
-                    {m.lines?.map((l: string, i: number) => (
-                      <div key={i} className="text-[11px] text-gray-500 mt-0.5">{l}</div>
-                    ))}
-                    {m.linkText && (
-                      <Link to={m.linkUrl || '#'} className="text-[11px] hover:underline mt-0.5 inline-block" style={{ color: theme.link }}>
-                        {m.linkText}
-                      </Link>
-                    )}
+             </div>
+             <div className="text-[#00a651] text-[13px] font-medium mb-3">In stock</div>
+             <div className="flex flex-col gap-3">
+               <div className="flex items-center gap-3 h-[44px]">
+                  <div className="flex items-center justify-between border border-gray-200 rounded-full h-full w-[110px] px-1 bg-gray-50/50 flex-shrink-0">
+                     <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-8 h-full flex items-center justify-center text-gray-500 hover:text-gray-900"><Minus className="w-4 h-4"/></button>
+                     <span className="font-bold text-[14px] text-gray-900">{quantity}</span>
+                     <button onClick={() => setQuantity(quantity + 1)} className="w-8 h-full flex items-center justify-center text-gray-500 hover:text-gray-900"><Plus className="w-4 h-4"/></button>
                   </div>
-                </div>
-              ))}
-            </div>
-            {cfg.delivery.detailsText && (
-              <Link
-                to={cfg.delivery.detailsUrl}
-                className="text-[11.5px] hover:underline mt-3 inline-flex items-center gap-1"
-                style={{ color: theme.link }}
-              >
-                {cfg.delivery.detailsText}
-                <ChevronDown className="w-3 h-3" />
-              </Link>
-            )}
-          </Panel>
-        );
-      }
-
-      case 'payment_options': {
-        if (!cfg.payment.enabled) return null;
-        const methods = cfg.payment.methods.filter((m: any) => m.enabled);
-        return (
-          <Panel key={block.id} title={cfg.payment.title}>
-            <div className="flex items-start justify-between gap-2 mb-2.5">
-              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                {methods.map((m: any) => (
-                  <span
-                    key={m.id}
-                    className="h-[22px] w-[38px] border border-gray-200 rounded-[4px] flex items-center justify-center bg-white shrink-0 overflow-hidden"
-                    title={m.label}
+                  <div ref={addToCartRef} className="flex-1 flex items-stretch h-full">
+                     <button onClick={handleAddToCart} className={`w-full text-white rounded-full font-bold text-[14px] flex items-center justify-center gap-1.5 transition-all outline-none ${added ? 'bg-[#008c44]' : 'bg-[#00a651] hover:bg-[#008c44]'}`}>
+                        {added ? <CheckCircle2 className="w-[18px] h-[18px]" strokeWidth={2.5}/> : <ShoppingBag className="w-[18px] h-[18px]" strokeWidth={2.5}/>}
+                        {added ? t('Added') : t('Add to cart')}
+                     </button>
+                  </div>
+               </div>
+               <button onClick={handleBuyNow} className="w-full h-[44px] bg-[#ff5c00] hover:bg-[#e65300] text-white rounded-full font-bold text-[14px] flex items-center justify-center transition-all outline-none shadow-sm shadow-[#ff5c00]/20 cursor-pointer">
+                  Buy Now
+               </button>
+               <div className="flex items-center gap-2 mt-2">
+                  <button 
+                    type="button"
+                    onClick={() => toggleWishlist(product)}
+                    className={`flex-1 h-[40px] rounded-full text-xs font-bold border flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                      isInWishlist(product.id)
+                        ? 'border-red-200 bg-red-50 text-red-600'
+                        : 'border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
                   >
-                    {m.image ? (
-                      <img src={m.image} alt={m.label} className="max-h-[12px] max-w-[32px] object-contain" />
-                    ) : (
-                      <span className="text-[7px] font-bold text-gray-500 truncate px-0.5">{m.label}</span>
-                    )}
-                  </span>
-                ))}
-              </div>
-              {cfg.payment.detailsText && (
-                <Link to={cfg.payment.detailsUrl} className="text-[11.5px] hover:underline shrink-0 flex items-center gap-1 whitespace-nowrap" style={{ color: theme.link }}>
-                  {cfg.payment.detailsText}
-                  <ChevronDown className="w-3 h-3" />
-                </Link>
-              )}
-            </div>
-            {cfg.payment.note && <p className="text-[11px] text-gray-500 leading-relaxed">{cfg.payment.note}</p>}
-          </Panel>
-        );
-      }
-
-      case 'warranty_returns': {
-        if (!cfg.warrantyReturns.enabled) return null;
-        const items = cfg.warrantyReturns.items.filter((i: any) => i.enabled);
-        if (items.length === 0) return null;
-        return (
-          <Panel key={block.id} title={cfg.warrantyReturns.title}>
-            <div className="flex flex-col gap-2.5">
-              {items.map((it: any) => (
-                <div key={it.id} className="flex items-start justify-between gap-2">
-                  <p className="text-[11.5px] text-gray-500 leading-relaxed">
-                    {it.text} {it.highlight && <span className="font-bold text-gray-900">{it.highlight}</span>}
-                  </p>
-                  {it.linkText && (
-                    <Link to={it.linkUrl || '#'} className="text-[11.5px] hover:underline shrink-0 flex items-center gap-1" style={{ color: theme.link }}>
-                      {it.linkText}
-                      <ChevronDown className="w-3 h-3" />
-                    </Link>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Panel>
-        );
-      }
-
-      /* ---------------- main content ---------------- */
-      case 'features': {
-        if (!cfg.features.enabled) return null;
-        // Prefer grouped spec data; fall back to the flat `features` array.
-        const groups =
-          product.specGroups?.length
-            ? product.specGroups
-            : product.features?.length
-            ? [{ id: 'flat', title: '', items: product.features }]
-            : [];
-        if (groups.length === 0) return null;
-
-        return (
-          <div key={block.id} className="mb-10">
-            <h2 className="text-[17px] font-bold text-gray-900 mb-4">{cfg.features.title}</h2>
-            <div className={`grid gap-x-12 gap-y-4 ${cfg.features.columns === 2 ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
-              {groups.map((g: any) => (
-                <div key={g.id || g.title}>
-                  {g.title && <h3 className="text-[12.5px] font-bold text-gray-900 mb-1.5">{g.title}</h3>}
-                  {g.items.map((it: any, i: number) => (
-                    <SpecRow key={i} name={it.name} value={it.value} />
-                  ))}
-                </div>
-              ))}
-            </div>
-            {cfg.features.showFindSimilar && (
-              <Link
-                to={`/search?q=${encodeURIComponent(product.brand || product.title.split(' ')[0])}`}
-                className="mt-5 inline-flex items-center gap-1.5 border border-gray-300 rounded-full px-3.5 py-1.5 text-[12px] text-gray-700 hover:border-gray-500 transition-colors"
-              >
-                <SearchIcon className="w-3.5 h-3.5" />
-                {cfg.features.findSimilarLabel}
-              </Link>
-            )}
+                    <Heart className={`w-4 h-4 ${isInWishlist(product.id) ? 'fill-red-600 text-red-600' : ''}`} />
+                    {isInWishlist(product.id) ? 'In Wishlist' : 'Add to Wishlist'}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => addToCompare(product)}
+                    className="flex-1 h-[40px] rounded-full text-xs font-bold border border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <BarChart2 className="w-4 h-4 text-blue-500" />
+                    Compare
+                  </button>
+               </div>
+             </div>
           </div>
         );
-      }
-
+      case 'shipping_info':
+        return (
+          <div key={block.id} className="border border-gray-200 rounded-[12px] py-2 bg-white shadow-sm flex flex-col mb-6">
+             <div className="p-4 border-b border-gray-100">
+                <div className="flex items-center justify-between font-bold text-[14px] text-gray-900 mb-3">Delivery <ChevronUp className="w-[18px] h-[18px] text-gray-400"/></div>
+                <div className="text-[12px] text-gray-500">Fast delivery nationwide</div>
+             </div>
+          </div>
+        );
+      case 'features':
+        return product.features?.length > 0 ? (
+          <div key={block.id} className="mt-8 mb-8 px-1 w-full">
+            <h3 className="font-bold text-[18px] text-gray-900 mb-4">Features</h3>
+            <div className="flex flex-col gap-3">
+               {product.features.map((feature: any, index: number) => (
+                  <div key={index} className="flex items-center">
+                     <span className="text-[13px] text-gray-500">{feature.name}</span>
+                     <div className="flex-1 border-b border-dotted border-gray-300 mx-2"></div>
+                     <span className="text-[13px] text-gray-900">{feature.value}</span>
+                  </div>
+               ))}
+            </div>
+          </div>
+        ) : null;
       case 'full_description':
-        if (!cfg.description.enabled || !product.description) return null;
+        return product.description ? (
+          <div key={block.id} className="mb-12 px-1 w-full">
+            <h2 className="text-[24px] font-extrabold text-gray-900 mb-6 font-sans">Description</h2>
+            <div className="prose max-w-none text-gray-600 text-[13px] leading-[1.8] whitespace-pre-line">{product.description}</div>
+          </div>
+        ) : null;
+      case 'custom_html':
         return (
-          <div key={block.id} className="mb-10">
-            <h2 className="text-[17px] font-bold text-gray-900 mb-3">{cfg.description.title}</h2>
-            <div className="text-[12.5px] text-gray-600 leading-[1.85] whitespace-pre-line">{product.description}</div>
+          <div key={block.id} className="w-full my-6" dangerouslySetInnerHTML={{ __html: block.settings?.html || '' }} />
+        );
+      case 'countdown':
+        return (
+          <div key={block.id} className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 flex flex-col items-center justify-center text-center">
+            <h4 className="text-red-600 font-bold mb-2 flex items-center gap-2"><Clock className="w-5 h-5"/> {block.settings?.text || 'Limited time offer!'}</h4>
+            <div className="flex gap-3 mt-1">
+              <div className="bg-white rounded shadow-sm px-3 py-1 font-mono font-bold text-lg border border-red-100">12<span className="text-xs font-sans text-gray-500 ml-1">h</span></div>
+              <div className="bg-white rounded shadow-sm px-3 py-1 font-mono font-bold text-lg border border-red-100">45<span className="text-xs font-sans text-gray-500 ml-1">m</span></div>
+              <div className="bg-white rounded shadow-sm px-3 py-1 font-mono font-bold text-lg border border-red-100">30<span className="text-xs font-sans text-gray-500 ml-1">s</span></div>
+            </div>
+            <div className="mt-3 text-xs text-red-500/80">Prices may increase after countdown ends</div>
           </div>
         );
-
-      case 'key_features': {
-        if (!cfg.keyFeatures.enabled) return null;
-        const list: string[] = product.keyFeatures || [];
-        if (list.length === 0) return null;
-        const collapsed = cfg.keyFeatures.collapsedCount || 0;
-        const shown = showKeyFeatures ? list : list.slice(0, collapsed);
+      case 'stock_indicator':
         return (
-          <div key={block.id} className="mb-10">
-            <h2 className="text-[17px] font-bold text-gray-900 mb-3">{cfg.keyFeatures.title}</h2>
-            {shown.length > 0 && (
-              <ul className="flex flex-col gap-1.5 mb-2">
-                {shown.map((f, i) => (
-                  <li key={i} className="text-[12.5px] text-gray-600 leading-relaxed flex gap-2">
-                    <span className="text-gray-400 mt-[7px] w-1 h-1 rounded-full bg-gray-400 shrink-0" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {list.length > collapsed && (
-              <button
-                onClick={() => setShowKeyFeatures(!showKeyFeatures)}
-                className="text-[12px] text-gray-600 hover:text-gray-900 inline-flex items-center gap-1"
-              >
-                {showKeyFeatures ? cfg.keyFeatures.lessLabel : cfg.keyFeatures.moreLabel}
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showKeyFeatures ? 'rotate-180' : ''}`} />
-              </button>
-            )}
+          <div key={block.id} className="mb-6 flex items-center gap-2">
+            <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-sm font-medium text-gray-700">Only 5 items left in stock</span>
           </div>
         );
-      }
-
-      case 'reviews':
-        if (!cfg.reviews.enabled) return null;
+      case 'faq':
         return (
-          <div key={block.id} id="reviews">
-            <ReviewsSection
-              product={product}
-              config={cfg.reviews}
-              onAddReview={handleAddReview}
-              onVote={handleVote}
-            />
-          </div>
-        );
-
-      case 'related_products':
-        if (!cfg.related.enabled) return null;
-        return (
-          <RelatedProducts
-            key={block.id}
-            product={product}
-            products={products}
-            recentlyViewed={recentlyViewed}
-            config={cfg.related}
-            theme={theme}
-          />
-        );
-
-      case 'promo_banners': {
-        if (!cfg.promoBanners.enabled) return null;
-        const banners = cfg.promoBanners.banners.filter((b: any) => b.enabled);
-        if (banners.length === 0) return null;
-        return (
-          <div key={block.id} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-            {banners.map((b: any) => (
-              <Link
-                key={b.id}
-                to={b.link}
-                className="rounded-[10px] p-5 flex flex-col relative overflow-hidden group min-h-[170px]"
-                style={{ background: b.bg }}
-              >
-                <span className="text-[11px] text-gray-500 mb-0.5">{b.brand}</span>
-                <span className="text-[16px] font-bold text-gray-900 leading-tight mb-1">{b.title}</span>
-                <span className="text-[11px] text-gray-500 leading-snug max-w-[60%]">{b.subtitle}</span>
-                <span className="mt-auto text-[11.5px] font-semibold text-gray-900 underline decoration-1 underline-offset-2 w-fit">
-                  {b.buttonText}
-                </span>
-                {b.image && (
-                  <img
-                    src={b.image}
-                    alt=""
-                    className="absolute right-0 bottom-0 w-[45%] h-[75%] object-contain mix-blend-multiply group-hover:scale-105 transition-transform origin-bottom-right"
-                  />
-                )}
-              </Link>
+          <div key={block.id} className="mb-12 w-full">
+            <h2 className="text-[24px] font-extrabold text-gray-900 mb-6 font-sans">Frequently Asked Questions</h2>
+            {block.settings?.faqs?.map((faq: any, i: number) => (
+              <div key={i} className="mb-4 border border-gray-200 rounded-xl p-4">
+                <h4 className="font-bold text-gray-900 mb-2">{faq.q}</h4>
+                <p className="text-gray-600 text-sm">{faq.a}</p>
+              </div>
             ))}
           </div>
         );
+      case 'reviews': {
+        const displayReviews = (product.reviewList || (product.reviews > 0 ? [
+          { id: 1, author: 'Alex Johnson', rating: 5, text: 'Great product! Exactly as described.', media: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&h=200&fit=crop'], date: '2023-11-15', status: 'approved' },
+          { id: 2, author: 'Sarah Smith', rating: 4, text: 'Good quality, but shipping took a bit long.', date: '2023-10-02', status: 'approved' }
+        ].slice(0, product.reviews) : [])).filter((r: any) => r.status === 'approved' || !r.status);
+        
+        return (
+          <div key={block.id} className="mb-12 w-full">
+             <h2 className="text-[28px] font-extrabold text-gray-900 mb-6 font-sans">Reviews</h2>
+             <div className="flex flex-col md:flex-row gap-8 items-start mb-8">
+               <div className="flex items-start gap-6">
+                 <div className="flex flex-col text-center">
+                   <span className="text-[48px] font-bold text-gray-900 leading-[1] mb-1">{product.rating ? ((product.rating % 1 === 0) ? product.rating.toFixed(1) : product.rating) : '0.0'}</span>
+                   <span className="text-[12px] text-gray-500">Reviews: {product.reviews || 0}</span>
+                 </div>
+               </div>
+               <div className="flex flex-col">
+                  <h3 className="text-[18px] font-bold text-gray-900 mb-1.5 leading-tight">Review this product</h3>
+                  <button 
+                    onClick={() => setIsReviewModalOpen(true)}
+                    className="border-2 border-[#00a651] text-[#00a651] rounded-full px-5 py-1.5 text-[14px] font-bold w-fit hover:bg-green-50"
+                  >
+                    Write a review
+                  </button>
+               </div>
+             </div>
+             
+             {displayReviews.length > 0 ? (
+               <div className="flex flex-col gap-6">
+                 {displayReviews.map((review: any) => (
+                   <div key={review.id} className="border-b border-gray-100 pb-6 last:border-0">
+                     <div className="flex items-center gap-2 mb-2">
+                       <span className="font-bold text-[14px] text-gray-900">{review.author}</span>
+                       <span className="text-[12px] text-gray-400">&bull; {review.date}</span>
+                     </div>
+                     <div className="flex items-center gap-0.5 mb-2">
+                       {[1, 2, 3, 4, 5].map((i) => (
+                         <Star key={i} className={`w-[14px] h-[14px] ${i <= review.rating ? 'fill-[#ff5c00] text-[#ff5c00]' : 'fill-[#ff5c00]/20 text-[#ff5c00]/20'}`} />
+                       ))}
+                     </div>
+                     <p className="text-[14px] text-gray-700 leading-relaxed mb-3">{review.text}</p>
+                     
+                     {review.media && review.media.length > 0 && (
+                       <div className="flex gap-2 flex-wrap">
+                         {review.media.map((url: string, i: number) => (
+                           <div key={i} className="w-20 h-20 rounded border border-gray-200 overflow-hidden cursor-pointer" onClick={() => {
+                             setSelectedReviewMedia(url);
+                             setIsReviewLightboxOpen(true);
+                           }}>
+                             <img src={url} className="w-full h-full object-cover" alt="Review attached" />
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+                 ))}
+               </div>
+             ) : (
+               <p className="text-gray-500 text-[14px]">No reviews yet. Be the first to review this product!</p>
+             )}
+          </div>
+        );
       }
-
-      /* ---------------- optional extras ---------------- */
-      case 'faq':
+      case 'related_products':
         return (
-          <div key={block.id} className="mb-10">
-            <h2 className="text-[17px] font-bold text-gray-900 mb-4">{s.title || 'Frequently asked questions'}</h2>
-            <div className="flex flex-col gap-2">
-              {(s.faqs || []).map((f: any, i: number) => (
-                <details key={i} className="border border-gray-200 rounded-[10px] px-4 py-3 group">
-                  <summary className="font-semibold text-[13px] text-gray-900 cursor-pointer list-none flex items-center justify-between">
-                    {f.q}
-                    <ChevronDown className="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform" />
-                  </summary>
-                  <p className="text-[12.5px] text-gray-600 mt-2 leading-relaxed">{f.a}</p>
-                </details>
-              ))}
+          <div key={block.id} className="mb-12 w-full">
+            <h2 className="text-[24px] font-bold text-gray-900 mb-6 px-1">Related Products</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+              {products
+                .filter((p: any) => p.id !== product.id)
+                .slice(0, 5)
+                .map((relatedProduct: any) => (
+                  <ProductCard key={relatedProduct.id} product={relatedProduct} />
+                ))}
             </div>
           </div>
         );
-
-      case 'countdown':
-        return (
-          <div key={block.id} className="mb-4 p-3.5 rounded-[10px] bg-red-50 border border-red-100 text-center">
-            <div className="text-red-600 font-bold text-[12.5px] mb-2 flex items-center justify-center gap-1.5">
-              <Clock className="w-4 h-4" /> {s.text || 'Limited time offer!'}
-            </div>
-            <div className="flex gap-2 justify-center">
-              {[
-                { v: countdown.hours, l: 'h' },
-                { v: countdown.minutes, l: 'm' },
-                { v: countdown.seconds, l: 's' },
-              ].map((u) => (
-                <span key={u.l} className="bg-white rounded px-2.5 py-1 font-mono font-bold text-[15px] border border-red-100">
-                  {String(u.v).padStart(2, '0')}
-                  <span className="text-[10px] font-sans text-gray-500 ml-0.5">{u.l}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-        );
-
-      case 'stock_indicator':
-        return (
-          <div key={block.id} className="mb-4 flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-[12.5px] font-medium text-gray-700">
-              {s.text || `Only ${product.stock ?? 5} items left in stock`}
-            </span>
-          </div>
-        );
-
-      case 'shipping_info':
-        return (
-          <div key={block.id} className="border border-gray-200 rounded-[10px] p-4 mb-4">
-            <div className="font-bold text-[13px] text-gray-900 mb-1">{s.title || 'Delivery'}</div>
-            <div className="text-[11.5px] text-gray-500">{s.text || 'Fast delivery nationwide'}</div>
-          </div>
-        );
-
-      case 'warranty':
-        return (
-          <div key={block.id} className="bg-[#f2f4f8] rounded-[10px] p-4 mb-4">
-            <div className="flex items-center font-bold text-[12.5px] text-gray-900 mb-1.5 gap-2">
-              <Clock className="w-4 h-4" /> {product.warranty ? 'WARRANTY INFORMATION' : '14-DAY RETURN PERIOD'}
-            </div>
-            <p className="text-[11.5px] text-gray-600 leading-relaxed pl-6">
-              {product.warranty || 'All items with carrier network plans have a 14-day return period.'}
-            </p>
-          </div>
-        );
-
-      case 'custom_html':
-        return <div key={block.id} className="w-full my-5" dangerouslySetInnerHTML={{ __html: s.html || '' }} />;
-
       default:
         return null;
     }
   };
 
-  /* ------------------------------------------------------------------ */
-
-  const tpl = product.pageTemplateOverride || productTemplate;
-  const region = (key: string) => (tpl as any)[key] || [];
-
   return (
-    <main className="max-w-[1600px] mx-auto px-4 sm:px-6 py-5">
-      {cfg.breadcrumbs.enabled && (
-        <nav className="text-[11.5px] text-gray-400 mb-4 flex items-center gap-1.5 flex-wrap">
-          {cfg.breadcrumbs.showHome && (
-            <>
-              <Link to="/" className="hover:text-gray-700">{cfg.breadcrumbs.homeLabel}</Link>
-              <span>/</span>
-            </>
-          )}
-          {(category || product.categoryName) && (
-            <>
-              <Link to={`/category/${product.categoryId}`} className="hover:text-gray-700">
-                {category?.name || product.categoryName}
-              </Link>
-              <span>/</span>
-            </>
-          )}
-          <span className="text-gray-600">{product.title}</span>
-        </nav>
-      )}
-
-      <div className="flex flex-col lg:flex-row gap-6 xl:gap-10 items-start">
-        {/* Main column: gallery + details, then long-form content */}
-        <div className="flex-1 min-w-0 w-full">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 xl:gap-10 items-start mb-8">
-            <div className="flex flex-col">{region('leftColumn').map(renderBlock)}</div>
-            <div className="flex flex-col">{region('middleColumn').map(renderBlock)}</div>
-          </div>
-          <div className="flex flex-col">{region('mainContent').map(renderBlock)}</div>
-        </div>
-
-        {/* Sticky buy box */}
-        <aside className="w-full lg:w-[300px] xl:w-[330px] shrink-0 lg:sticky lg:top-4 self-start">
-          <div className="border border-gray-200 rounded-[12px] p-4">
-            {region('rightSidebar').map(renderBlock)}
-          </div>
-        </aside>
+    <main className="max-w-[1440px] mx-auto px-4 py-8">
+      {/* Breadcrumbs */}
+      <div className="text-[12px] text-gray-500 mb-6 flex items-center gap-2 border-b border-gray-100 pb-3 w-full">
+        <span>Home / Products / {product.title}</span>
       </div>
 
-      {/* Full-width sections */}
-      <div className="w-full mt-4">{region('bottomContent').map(renderBlock)}</div>
+      <div className="flex flex-col lg:flex-row gap-8 xl:gap-10 items-start relative px-1">
+        <div className="flex-1 flex flex-col w-full min-w-0">
+          <div className="grid grid-cols-1 lg:grid-cols-9 gap-8 xl:gap-10 items-start relative">
+            <div className="flex flex-col lg:col-span-5 relative">
+              {template.leftColumn.map(renderBlock)}
+            </div>
+            <div className="flex flex-col lg:col-span-4 relative">
+              {template.middleColumn.map(renderBlock)}
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex flex-col w-full lg:w-[320px] xl:w-[340px] shrink-0 gap-6 sticky top-[84px] self-start z-10">
+           {template.rightSidebar.map(renderBlock)}
+        </div>
+      </div>
 
-      {/* Sticky add-to-cart bar */}
+      <div className="w-full mt-12 flex flex-col">
+         {template.bottomContent.map(renderBlock)}
+      </div>
+
+      {/* Sticky Add to Cart Bar */}
       <AnimatePresence>
-        {cfg.buyBox.stickyBarEnabled && showStickyBar && (
+        {showStickyCart && (
           <motion.div
-            initial={{ y: 90, opacity: 0 }}
+            initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 90, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-            className="fixed bottom-0 left-0 right-0 z-[100] bg-white border-t border-gray-200 shadow-[0_-6px_24px_rgba(0,0,0,0.08)] px-4 py-3"
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="fixed bottom-0 left-0 right-0 z-[100] bg-white border-t border-gray-200 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] p-3 sm:px-6 sm:py-4 flex flex-col sm:flex-row items-center justify-center gap-4 max-w-full w-full overflow-hidden"
           >
-            <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-4">
-              <div className="hidden md:flex items-center gap-3 min-w-0 flex-1">
-                <div className="w-11 h-11 border border-gray-100 rounded-lg p-1 shrink-0">
-                  <img
-                    src={selectedMedia?.url || product.image}
-                    alt=""
-                    className="w-full h-full object-contain mix-blend-multiply"
-                  />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[13px] font-bold text-gray-900 truncate">{product.title}</span>
-                  <span className="text-[11px] text-gray-500 truncate">
-                    {[selectedColor, selectedSize].filter(Boolean).join(' · ')}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 shrink-0">
-                <div className="flex flex-col">
-                  <span className="text-[19px] font-bold text-gray-900 leading-none">{formatPrice(displayPrice)}</span>
-                  {displayOldPrice && (
-                    <span className="text-[11px] text-gray-400 line-through mt-0.5">{formatPrice(displayOldPrice)}</span>
+            <div className="flex items-center w-full max-w-[1440px] mx-auto justify-between gap-4">
+              <div className="hidden md:flex items-center gap-4 flex-1 min-w-0">
+                <div className="w-12 h-12 bg-white border border-gray-100 shadow-sm rounded-xl flex items-center justify-center p-1 shrink-0">
+                  {selectedMedia.type === 'video' ? (
+                    <video src={selectedMedia.url} className="w-full h-full object-cover rounded-[6px]" />
+                  ) : (
+                    <img src={selectedMedia.url || product.image || undefined} alt={product.title} className="w-full h-full object-contain mix-blend-multiply" />
                   )}
                 </div>
-                <button
-                  onClick={handleAddToCart}
-                  disabled={!inStock}
-                  className="h-[42px] px-7 text-white rounded-[8px] font-bold text-[13px] flex items-center gap-2 disabled:opacity-40 hover:brightness-95 transition-all"
-                  style={{ background: added ? '#00a651' : theme.primary }}
-                >
-                  {added ? <Check className="w-4 h-4" strokeWidth={3} /> : <ShoppingCart className="w-4 h-4" />}
-                  {added ? cfg.buyBox.addedLabel : cfg.buyBox.addToCartLabel}
-                </button>
+                <div className="flex flex-col min-w-0 pr-4">
+                  <span className="text-[14px] font-bold text-gray-900 truncate">{product.title}</span>
+                  <span className="text-[12px] text-gray-500 truncate">{Object.values(selectedOptions).join(' · ')}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-6 w-full sm:w-auto overflow-hidden">
+                <div className="flex flex-col shrink-0">
+                   <span className="text-[20px] sm:text-[24px] font-extrabold text-gray-900 leading-none tracking-tight">{formatPrice(displayPrice)}</span>
+                   {displayOldPrice && <span className="text-[12px] sm:text-[13px] text-gray-500 line-through leading-none mt-1">{formatPrice(displayOldPrice)}</span>}
+                </div>
+                
+                <div className="flex items-stretch gap-2 sm:gap-3 h-[44px]">
+                   <div className="hidden sm:flex items-center border border-gray-200 rounded-full w-[90px] justify-between px-1 bg-gray-50 shrink-0">
+                      <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-8 h-full flex items-center justify-center text-gray-500 hover:text-gray-900"><Minus className="w-3.5 h-3.5"/></button>
+                      <span className="font-bold text-[14px] text-gray-900">{quantity}</span>
+                      <button onClick={() => setQuantity(quantity + 1)} className="w-8 h-full flex items-center justify-center text-gray-500 hover:text-gray-900"><Plus className="w-3.5 h-3.5"/></button>
+                   </div>
+                   <button 
+                     onClick={handleAddToCart}
+                     className={`px-6 sm:px-8 min-w-[130px] sm:min-w-[150px] text-white rounded-full font-bold text-[14px] flex items-center justify-center gap-2 transition-all outline-none shadow-sm ${added ? 'bg-[#008c44] scale-95' : 'bg-[#00a651] hover:bg-[#008c44] hover:-translate-y-0.5 hover:shadow-md'}`}
+                   >
+                      {added ? <CheckCircle2 className="w-[18px] h-[18px]" strokeWidth={2.5}/> : <ShoppingBag className="w-[18px] h-[18px]" strokeWidth={2.5}/>}
+                      {added ? t('Added') : t('Add to cart')}
+                   </button>
+                </div>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isLightboxOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 sm:p-6 bg-gradient-to-b from-black/80 to-transparent absolute top-0 left-0 right-0 z-10">
+               <div className="flex-1 min-w-0 pr-4">
+                 <h2 className="text-white text-[15px] sm:text-lg font-bold truncate">{product.title}</h2>
+                 <p className="text-white/70 text-xs sm:text-sm truncate mt-0.5">
+                   {Object.values(selectedOptions).join(' · ')}
+                 </p>
+               </div>
+               <button onClick={() => setIsLightboxOpen(false)} className="text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 p-2 sm:p-2.5 rounded-full backdrop-blur-md shrink-0">
+                 <X className="w-5 h-5 sm:w-6 sm:h-6" />
+               </button>
+            </div>
+
+            {/* Media Content */}
+            <div className="flex-1 flex items-center justify-center p-0 min-h-0 relative select-none" onClick={() => setIsLightboxOpen(false)}>
+               <div className="relative w-full h-full max-w-[1440px] max-h-[85vh] p-4 sm:p-12 flex items-center justify-center mt-16 mb-32" onClick={(e) => e.stopPropagation()}>
+                 {selectedMedia.type === 'video' ? (
+                   <video src={selectedMedia.url} controls autoPlay className="max-w-full max-h-full object-contain" />
+                 ) : (
+                   <img src={selectedMedia.url} alt={product.title} className="max-w-full max-h-full object-contain shadow-2xl" />
+                 )}
+                 
+                 <button 
+                   className="absolute left-2 sm:left-8 top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all hover:scale-105"
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     const curIdx = mediaList.findIndex(m => m.url === selectedMedia.url);
+                     const prevIdx = curIdx > 0 ? curIdx - 1 : mediaList.length - 1;
+                     setSelectedMedia(mediaList[prevIdx]);
+                   }}
+                 >
+                   <ChevronRight className="w-5 h-5 sm:w-8 sm:h-8 rotate-180" />
+                 </button>
+
+                 <button 
+                   className="absolute right-2 sm:right-8 top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all hover:scale-105"
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     const curIdx = mediaList.findIndex(m => m.url === selectedMedia.url);
+                     const nextIdx = curIdx < mediaList.length - 1 ? curIdx + 1 : 0;
+                     setSelectedMedia(mediaList[nextIdx]);
+                   }}
+                 >
+                   <ChevronRight className="w-5 h-5 sm:w-8 sm:h-8" />
+                 </button>
+               </div>
+            </div>
+
+            {/* Thumbnails Row */}
+            {mediaList.length > 1 && (
+            <div className="absolute bottom-[80px] sm:bottom-[100px] left-0 right-0 z-10 flex justify-center pb-4 pt-8 bg-gradient-to-t from-black/50 to-transparent pointer-events-none">
+                <div className="flex gap-2 sm:gap-3 overflow-x-auto px-4 snap-x snap-mandatory pointer-events-auto max-w-full" style={{scrollbarWidth: 'none'}}>
+                  {mediaList.map((media, i) => (
+                    <div 
+                      key={i} 
+                      onClick={() => setSelectedMedia(media)}
+                      className={`w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0 rounded-[8px] sm:rounded-[12px] cursor-pointer transition-all snap-center relative overflow-hidden bg-white/5 border border-white/10 ${selectedMedia.url === media.url ? 'ring-2 ring-white scale-110 opacity-100 z-10' : 'opacity-50 hover:opacity-100 hover:scale-105'}`}
+                    >
+                      {media.type === 'video' ? (
+                        <>
+                          <video src={media.url} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                             <PlayCircle className="w-4 h-4 sm:w-6 sm:h-6 text-white bg-black/50 rounded-full" />
+                          </div>
+                        </>
+                      ) : (
+                        <img src={media.url || undefined} className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+            </div>
+            )}
+
+            {/* Bottom Bar */}
+            <div className="p-4 sm:p-6 bg-black flex flex-wrap items-center justify-center gap-4 sm:gap-6 absolute bottom-0 left-0 right-0 z-20 border-t border-white/10">
+              <div className="text-white text-xl sm:text-3xl font-extrabold">{formatPrice(displayPrice)}</div>
+              
+              <div className="hidden sm:flex items-center border border-gray-700 rounded-full h-[48px] w-[110px] justify-between px-1 bg-gray-800/50">
+                 <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-10 h-full flex items-center justify-center text-gray-400 hover:text-white transition-colors"><Minus className="w-4 h-4"/></button>
+                 <span className="font-bold text-[16px] text-white">{quantity}</span>
+                 <button onClick={() => setQuantity(quantity + 1)} className="w-10 h-full flex items-center justify-center text-gray-400 hover:text-white transition-colors"><Plus className="w-4 h-4"/></button>
+              </div>
+
+              <button 
+                onClick={handleAddToCart}
+                className={`w-full sm:w-auto min-w-[200px] px-8 py-3 sm:py-4 h-[48px] text-gray-900 rounded-full font-bold text-[15px] sm:text-[17px] flex items-center justify-center gap-2 transition-transform shadow-lg ${added ? 'bg-green-400 scale-95' : 'bg-white hover:scale-105'}`}
+              >
+                {added ? <CheckCircle2 className="w-[20px] h-[20px]" strokeWidth={2.5}/> : <ShoppingBag className="w-[20px] h-[20px]" strokeWidth={2.5}/>}
+                {added ? t('Added to Box') : t('Add to Box')}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isReviewModalOpen && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[20px] p-6 sm:p-8 max-w-lg w-full relative shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <button 
+                onClick={() => setIsReviewModalOpen(false)}
+                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <h3 className="text-2xl font-bold text-gray-900 mb-6">Write a Review</h3>
+              
+              {siteSettings.requirePurchaseToReview && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="mt-1 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                      checked={simulatedPurchaseComplete}
+                      onChange={(e) => setSimulatedPurchaseComplete(e.target.checked)}
+                    />
+                    <div className="text-sm text-blue-800">
+                      <span className="font-semibold block placeholder-simulation">Simulate user login & completed purchase</span>
+                      Check this to bypass the "require purchase" setting for testing purposes.
+                    </div>
+                  </label>
+                </div>
+              )}
+              
+              <form onSubmit={handleSubmitReview} className="flex flex-col gap-5">
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Rating</label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star 
+                        key={star}
+                        className={`w-8 h-8 cursor-pointer transition-colors ${star <= reviewForm.rating ? 'fill-[#ff5c00] text-[#ff5c00]' : 'text-gray-300'}`}
+                        onClick={() => setReviewForm({ ...reviewForm, rating: star })}
+                      />
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Your Name</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={reviewForm.author}
+                    onChange={(e) => setReviewForm({ ...reviewForm, author: e.target.value })}
+                    className="w-full border border-gray-300 rounded-[10px] px-4 py-3 text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+                    placeholder="Enter your name"
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">Your Review</label>
+                    <textarea 
+                      required
+                      rows={4}
+                      value={reviewForm.text}
+                      onChange={(e) => setReviewForm({ ...reviewForm, text: e.target.value })}
+                      className="w-full border border-gray-300 rounded-[10px] px-4 py-3 text-sm focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all resize-none"
+                      placeholder="What did you like or dislike about this product?"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">Attach Photos (Optional)</label>
+                    
+                    {reviewForm.media.length > 0 && (
+                      <div className="flex gap-3 flex-wrap mb-3">
+                        {reviewForm.media.map((url, i) => (
+                          <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 group">
+                            <img src={url} className="w-full h-full object-cover" alt="Review upload" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <button 
+                                type="button"
+                                onClick={() => setReviewForm(prev => ({ ...prev, media: prev.media.filter((_, idx) => idx !== i) }))}
+                                className="bg-white text-gray-900 hover:text-red-600 rounded-full p-1.5 transition-colors shadow-sm"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <label 
+                      htmlFor="review-image-upload" 
+                      className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-[10px] hover:border-[#00a651] hover:bg-green-50/30 cursor-pointer transition-colors group"
+                    >
+                      <input 
+                        type="file" 
+                        id="review-image-upload" 
+                        multiple 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={handleReviewImageUpload} 
+                      />
+                      <ImagePlus className="w-6 h-6 text-gray-400 group-hover:text-[#00a651] mb-2 transition-colors" />
+                      <span className="text-sm font-medium text-gray-600 group-hover:text-[#00a651] transition-colors">Click to upload photos</span>
+                    </label>
+                  </div>
+                </div>
+                
+                <div className="mt-2 flex gap-3">
+                  <button 
+                    type="button"
+                    onClick={() => setIsReviewModalOpen(false)}
+                    className="flex-1 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full font-bold text-sm transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-1 py-3 text-white bg-[#00a651] hover:bg-[#008c44] rounded-full font-bold text-sm transition-colors shadow-sm"
+                  >
+                    Submit Review
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isReviewLightboxOpen && selectedReviewMedia && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black/90 flex flex-col backdrop-blur-sm items-center justify-center"
+          >
+            <button 
+              onClick={() => setIsReviewLightboxOpen(false)}
+              className="absolute top-6 right-6 p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors z-10"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <motion.img 
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              src={selectedReviewMedia} 
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+              alt="Review attachment"
+            />
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,174 +1,452 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import { api } from '../lib/api';
-import { formatMoney, resolveCurrency } from '../lib/currency';
-import { useLang } from './LanguageContext';
-import { useAdmin } from './AdminContext';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-export interface CartLine {
-  productId: number;
-  title: string;
-  code: string;
-  image: string;
-  unitPrice: number;
+export interface CartItem {
+  product: any;
   quantity: number;
-  lineTotal: number;
-  inStock: boolean;
-  color?: string;
-  size?: string;
-  guarantee?: string;
-  servicePlan?: string;
-  options?: Record<string, string | undefined>;
 }
 
-interface CartTotals {
-  lines: CartLine[];
-  subtotal: number;
-  shipping: number;
-  tax: number;
-  total: number;
+export interface ToastItem {
+  id: string;
+  title: string;
+  description?: string;
+  type?: 'success' | 'info' | 'error';
 }
 
+export interface Coupon {
+  code: string;
+  discountPercent: number;
+  label: string;
+  minSpend?: number;
+}
 
-interface CartContextType extends CartTotals {
-  addToCart: (product: any, quantity?: number) => Promise<void>;
-  removeFromCart: (index: number) => Promise<void>;
-  updateQuantity: (index: number, quantity: number) => Promise<void>;
-  clearCart: () => Promise<void>;
-  refreshCart: () => Promise<void>;
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  zip?: string;
+  avatar?: string;
+  createdAt?: string;
+}
+
+const translations: Record<string, Record<string, string>> = {
+  English: {
+    'Search products': 'Search products',
+    'Categories': 'Categories',
+    'Delivery and payment': 'Delivery and payment',
+    'Returns': 'Returns',
+    'Store locator': 'Store locator',
+    'Contacts': 'Contacts',
+    'Information': 'Information',
+    'In stock': 'In stock',
+    'Add to Cart': 'Add to Cart',
+    'Added to Cart': 'Added to Cart',
+    'Add to Wishlist': 'Add to Wishlist',
+    'Shopping Cart': 'Shopping Cart',
+    'Checkout': 'Checkout',
+    'Product Attributes': 'Product Attributes',
+    'Product not found': 'Product not found',
+    'In demand this week': 'In demand this week',
+    'Promotional offers': 'Promotional offers',
+    'Reviews': 'Reviews',
+  },
+  Spanish: {
+    'Search products': 'Buscar productos',
+    'Categories': 'Categorías',
+    'Delivery and payment': 'Envío y pago',
+    'Returns': 'Devoluciones',
+    'Store locator': 'Ubicación de tiendas',
+    'Contacts': 'Contactos',
+    'Information': 'Información',
+    'In stock': 'En stock',
+    'Add to Cart': 'Añadir al carrito',
+    'Added to Cart': 'Añadido al carrito',
+    'Add to Wishlist': 'Añadir a deseos',
+    'Shopping Cart': 'Carrito de compras',
+    'Checkout': 'Pagar',
+    'Product Attributes': 'Atributos del producto',
+    'Product not found': 'Producto no encontrado',
+    'In demand this week': 'En demanda esta semana',
+    'Promotional offers': 'Ofertas promocionales',
+    'Reviews': 'Reseñas',
+  },
+  French: {
+    'Search products': 'Rechercher des produits',
+    'Categories': 'Catégories',
+    'Delivery and payment': 'Livraison et paiement',
+    'Returns': 'Retours',
+    'Store locator': 'Localisateur',
+    'Contacts': 'Contacts',
+    'Information': 'Information',
+    'In stock': 'En stock',
+    'Add to Cart': 'Ajouter au panier',
+    'Added to Cart': 'Ajouté au panier',
+    'Add to Wishlist': 'Ajouter aux favoris',
+    'Shopping Cart': 'Panier',
+    'Checkout': 'Payer',
+    'Product Attributes': 'Attributs du produit',
+    'Product not found': 'Produit introuvable',
+    'In demand this week': 'En demande cette semaine',
+    'Promotional offers': 'Offres promotionnelles',
+    'Reviews': 'Avis',
+  }
+};
+
+const currencyRates: Record<string, { symbol: string, rate: number }> = {
+  '$': { symbol: '$', rate: 1 },
+  '€': { symbol: '€', rate: 0.92 },
+  '£': { symbol: '£', rate: 0.79 },
+  '৳': { symbol: '৳', rate: 118 },
+};
+
+const AVAILABLE_COUPONS: Record<string, Coupon> = {
+  'WELCOME10': { code: 'WELCOME10', discountPercent: 10, label: '10% New Customer Discount' },
+  'SAVE20': { code: 'SAVE20', discountPercent: 20, label: '20% Super Sale Discount', minSpend: 50 },
+  'FREESHIP': { code: 'FREESHIP', discountPercent: 5, label: 'Free Shipping Voucher' },
+  'UNITHEME': { code: 'UNITHEME', discountPercent: 15, label: '15% UniTheme2 VIP Promo' },
+};
+
+interface CartContextType {
+  items: CartItem[];
+  addToCart: (product: any, quantity?: number) => void;
+  removeFromCart: (productId: number) => void;
+  updateQuantity: (productId: number, quantity: number) => void;
+  clearCart: () => void;
   cartCount: number;
   cartTotal: number;
-  items: { product: any; quantity: number }[];
-  busy: boolean;
-  error: string | null;
+  
+  // Wishlist State
+  wishlistItems: any[];
+  addToWishlist: (product: any) => void;
+  removeFromWishlist: (productId: number) => void;
+  toggleWishlist: (product: any) => void;
+  isInWishlist: (productId: number) => boolean;
+  clearWishlist: () => void;
+  wishlistCount: number;
 
+  // Compare State
   compareItems: any[];
   addToCompare: (product: any) => void;
   removeFromCompare: (productId: number) => void;
 
+  // Coupon State
+  appliedCoupon: Coupon | null;
+  couponDiscount: number;
+  applyCoupon: (code: string) => { success: boolean; message: string };
+  removeCoupon: () => void;
+
+  // Toast Notifications
+  toasts: ToastItem[];
+  showToast: (title: string, type?: 'success' | 'info' | 'error', description?: string) => void;
+  dismissToast: (id: string) => void;
+
+  // User Auth & Profile
+  currentUser: UserProfile | null;
+  login: (email: string, name?: string, phone?: string) => void;
+  logout: () => void;
+  updateProfile: (profile: Partial<UserProfile>) => void;
+
   currency: string;
+  setCurrency: (c: string) => void;
+  language: string;
+  setLanguage: (l: string) => void;
   formatPrice: (price: number) => string;
+  t: (key: string) => string;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const EMPTY: CartTotals = { lines: [], subtotal: 0, shipping: 0, tax: 0, total: 0 };
-
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { lang } = useLang();
-  const { siteSettings } = useAdmin();
-  const [cart, setCart] = useState<CartTotals>(EMPTY);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // The store's currency comes from admin settings; shoppers cannot change it,
-  // because the amount charged at checkout is always in this currency.
-  const currency = resolveCurrency(siteSettings?.currency).code;
-  const [compareItems, setCompareItems] = useState<any[]>([]);
-
-  // Guards against overlapping writes clobbering each other.
-  const inFlight = useRef<Promise<void> | null>(null);
-
-  const refreshCart = useCallback(async () => {
+  // 1. Cart Items with localStorage
+  const [items, setItems] = useState<CartItem[]>(() => {
     try {
-      const data = await api.get<CartTotals>('/cart');
-      setCart(data);
-      setError(null);
-    } catch (err: any) {
-      setError(err?.message ?? 'Could not load your cart.');
+      const saved = localStorage.getItem('unitheme_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
     }
-  }, []);
+  });
 
-  useEffect(() => { refreshCart(); }, [refreshCart]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('unitheme_cart', JSON.stringify(items));
+    } catch (e) {
+      console.warn('Failed to save cart to localStorage', e);
+    }
+  }, [items]);
 
-  /** Push the desired line-up to the server, which re-prices authoritatively. */
-  const commit = useCallback(async (lines: CartLine[]) => {
-    const run = async () => {
-      setBusy(true);
-      try {
-        const data = await api.put<CartTotals>('/cart', {
-          items: lines.map((l) => ({
-            productId: l.productId,
-            quantity: l.quantity,
-            color: l.color ?? l.options?.color,
-            size: l.size ?? l.options?.size,
-            guarantee: l.guarantee ?? l.options?.guarantee,
-            servicePlan: l.servicePlan,
-          })),
-        });
-        setCart(data);
-        setError(null);
-      } catch (err: any) {
-        setError(err?.message ?? 'Could not update your cart.');
-        await refreshCart();
-      } finally {
-        setBusy(false);
+  // 2. Wishlist with localStorage
+  const [wishlistItems, setWishlistItems] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('unitheme_wishlist');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('unitheme_wishlist', JSON.stringify(wishlistItems));
+    } catch (e) {
+      console.warn('Failed to save wishlist to localStorage', e);
+    }
+  }, [wishlistItems]);
+
+  // 3. User with localStorage
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem('unitheme_user');
+      if (saved) return JSON.parse(saved);
+      // Demo guest user default
+      return {
+        id: 'usr_101',
+        name: 'Alex Johnson',
+        email: 'alex.j@example.com',
+        phone: '+1 (917) 722-7425',
+        address: '1234 Broadway Ave, Apt 4B',
+        city: 'New York',
+        zip: '10001',
+        createdAt: '2024-01-15',
+      };
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (currentUser) {
+        localStorage.setItem('unitheme_user', JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem('unitheme_user');
       }
-    };
-    const chained = (inFlight.current ?? Promise.resolve()).then(run, run);
-    inFlight.current = chained;
-    return chained;
-  }, [refreshCart]);
+    } catch {}
+  }, [currentUser]);
 
-  const sameLine = (l: CartLine, p: any) =>
-    l.productId === p.id &&
-    (l.color ?? l.options?.color ?? '') === (p.selectedColor ?? '') &&
-    (l.size ?? l.options?.size ?? '') === (p.selectedSize ?? '') &&
-    (l.servicePlan ?? '') === (p.servicePlanId ?? '');
+  // 4. Toasts
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  const addToCart = async (product: any, quantity = 1) => {
-    const lines = [...cart.lines];
-    const existing = lines.findIndex((l) => sameLine(l, product));
-    if (existing >= 0) {
-      lines[existing] = { ...lines[existing], quantity: lines[existing].quantity + quantity };
-    } else {
-      lines.push({
-        productId: product.id,
-        title: product.title,
-        code: product.code ?? '',
-        image: product.image ?? '',
-        unitPrice: product.price,
-        quantity,
-        lineTotal: product.price * quantity,
-        inStock: product.inStock !== false,
-        color: product.selectedColor,
-        size: product.selectedSize,
-        guarantee: product.guarantee,
-        servicePlan: product.servicePlanId,
-      });
+  const showToast = (title: string, type: 'success' | 'info' | 'error' = 'success', description?: string) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, title, type, description }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
+  };
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // 5. Coupon
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+
+  const [compareItems, setCompareItems] = useState<any[]>([]);
+  const [currency, setCurrency] = useState('$');
+  const [language, setLanguage] = useState('English');
+
+  // Compare handlers
+  const addToCompare = (product: any) => {
+    setCompareItems((current) => {
+      if (current.some((item) => item.id === product.id)) {
+        showToast('Already in comparison', 'info', product.title);
+        return current;
+      }
+      showToast('Added to comparison', 'success', product.title);
+      return [...current, product];
+    });
+  };
+
+  const removeFromCompare = (productId: number) => {
+    setCompareItems((current) => current.filter((item) => item.id !== productId));
+    showToast('Removed from comparison', 'info');
+  };
+
+  // Cart handlers
+  const addToCart = (product: any, quantity: number = 1) => {
+    setItems((current) => {
+      const existing = current.find(
+        (item) =>
+          item.product.id === product.id &&
+          item.product.selectedColor === product.selectedColor &&
+          item.product.selectedSize === product.selectedSize
+      );
+      if (existing) {
+        return current.map((item) =>
+          item === existing ? { ...item, quantity: item.quantity + quantity } : item
+        );
+      }
+      return [...current, { product, quantity }];
+    });
+    showToast('Added to Cart', 'success', `${product.title} (x${quantity})`);
+  };
+
+  const removeFromCart = (productId: number) => {
+    const removedItem = items.find((i) => i.product.id === productId);
+    setItems((current) => current.filter((item) => item.product.id !== productId));
+    if (removedItem) {
+      showToast('Removed from Cart', 'info', removedItem.product.title);
     }
-    await commit(lines);
   };
 
-  const removeFromCart = async (index: number) => {
-    await commit(cart.lines.filter((_, i) => i !== index));
+  const updateQuantity = (productId: number, quantity: number) => {
+    if (quantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+    setItems((current) =>
+      current.map((item) => (item.product.id === productId ? { ...item, quantity } : item))
+    );
   };
 
-  const updateQuantity = async (index: number, quantity: number) => {
-    if (quantity <= 0) return removeFromCart(index);
-    await commit(cart.lines.map((l, i) => (i === index ? { ...l, quantity } : l)));
+  const clearCart = () => {
+    setItems([]);
+    setAppliedCoupon(null);
   };
 
-  const clearCart = async () => { await commit([]); };
+  // Wishlist handlers
+  const addToWishlist = (product: any) => {
+    if (!wishlistItems.some((item) => item.id === product.id)) {
+      setWishlistItems((prev) => [...prev, product]);
+      showToast('Added to Wishlist', 'success', product.title);
+    }
+  };
 
-  const addToCompare = (product: any) =>
-    setCompareItems((cur) => (cur.some((i) => i.id === product.id) ? cur : [...cur, product]));
+  const removeFromWishlist = (productId: number) => {
+    setWishlistItems((prev) => prev.filter((item) => item.id !== productId));
+    showToast('Removed from Wishlist', 'info');
+  };
 
-  const removeFromCompare = (productId: number) =>
-    setCompareItems((cur) => cur.filter((i) => i.id !== productId));
+  const toggleWishlist = (product: any) => {
+    if (isInWishlist(product.id)) {
+      removeFromWishlist(product.id);
+    } else {
+      addToWishlist(product);
+    }
+  };
 
-  // Prices are stored in the store's currency; nothing is converted here.
-  const formatPrice = (price: number) => formatMoney(price, currency, lang);
+  const isInWishlist = (productId: number) => {
+    return wishlistItems.some((item) => item.id === productId);
+  };
 
-  const cartCount = cart.lines.reduce((n, l) => n + l.quantity, 0);
+  const clearWishlist = () => {
+    setWishlistItems([]);
+    showToast('Wishlist cleared', 'info');
+  };
+
+  // Coupon handlers
+  const applyCoupon = (code: string) => {
+    const trimmed = code.trim().toUpperCase();
+    const coupon = AVAILABLE_COUPONS[trimmed];
+    if (!coupon) {
+      showToast('Invalid coupon code', 'error', 'Try WELCOME10 or SAVE20');
+      return { success: false, message: 'Invalid coupon code. Try WELCOME10 or SAVE20' };
+    }
+    if (coupon.minSpend && cartTotal < coupon.minSpend) {
+      const msg = `Minimum spend of $${coupon.minSpend} required for this coupon`;
+      showToast('Minimum spend not met', 'error', msg);
+      return { success: false, message: msg };
+    }
+    setAppliedCoupon(coupon);
+    showToast('Coupon Applied!', 'success', `${coupon.label} (-${coupon.discountPercent}%)`);
+    return { success: true, message: `${coupon.label} applied successfully!` };
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    showToast('Coupon removed', 'info');
+  };
+
+  // User auth handlers
+  const login = (email: string, name: string = 'Alex Johnson', phone?: string) => {
+    const profile: UserProfile = {
+      id: `usr_${Date.now()}`,
+      name: name || email.split('@')[0],
+      email,
+      phone: phone || '+1 (917) 722-7425',
+      address: '1234 Broadway Ave, Apt 4B',
+      city: 'New York',
+      zip: '10001',
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    setCurrentUser(profile);
+    showToast(`Welcome back, ${profile.name}!`, 'success', 'Signed in successfully');
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    showToast('Logged out', 'info', 'You have been signed out');
+  };
+
+  const updateProfile = (profileUpdates: Partial<UserProfile>) => {
+    if (currentUser) {
+      setCurrentUser({ ...currentUser, ...profileUpdates });
+      showToast('Profile updated', 'success', 'Your details have been saved');
+    }
+  };
+
+  // Totals calculations
+  const cartCount = items.reduce((total, item) => total + item.quantity, 0);
+  const cartTotal = items.reduce((total, item) => total + item.product.price * item.quantity, 0);
+  const wishlistCount = wishlistItems.length;
+
+  const couponDiscount = appliedCoupon
+    ? Math.round((cartTotal * appliedCoupon.discountPercent) / 100)
+    : 0;
+
+  const formatPrice = (price: number) => {
+    const rateData = currencyRates[currency] || currencyRates['$'];
+    const converted = price * rateData.rate;
+    if (Number.isInteger(converted)) {
+      return `${rateData.symbol}${converted.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    }
+    return `${rateData.symbol}${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const t = (key: string) => {
+    return translations[language]?.[key] || translations['English'][key] || key;
+  };
 
   return (
     <CartContext.Provider
       value={{
-        ...cart,
-        items: cart.lines.map((l) => ({ product: { ...l, id: l.productId, price: l.unitPrice }, quantity: l.quantity })),
-        addToCart, removeFromCart, updateQuantity, clearCart, refreshCart,
-        cartCount, cartTotal: cart.subtotal, busy, error,
-        compareItems, addToCompare, removeFromCompare,
-        currency, formatPrice,
+        items,
+        addToCart,
+        removeFromCart,
+        updateQuantity,
+        clearCart,
+        cartCount,
+        cartTotal,
+        wishlistItems,
+        addToWishlist,
+        removeFromWishlist,
+        toggleWishlist,
+        isInWishlist,
+        clearWishlist,
+        wishlistCount,
+        compareItems,
+        addToCompare,
+        removeFromCompare,
+        appliedCoupon,
+        couponDiscount,
+        applyCoupon,
+        removeCoupon,
+        toasts,
+        showToast,
+        dismissToast,
+        currentUser,
+        login,
+        logout,
+        updateProfile,
+        currency,
+        setCurrency,
+        language,
+        setLanguage,
+        formatPrice,
+        t,
       }}
     >
       {children}
@@ -178,6 +456,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
 export function useCart() {
   const context = useContext(CartContext);
-  if (context === undefined) throw new Error('useCart must be used within a CartProvider');
+  if (context === undefined) {
+    throw new Error('useCart must be used within a CartProvider');
+  }
   return context;
 }

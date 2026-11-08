@@ -12,7 +12,7 @@ interface Props {
   theme: any;
 }
 
-function MiniCard({ p, theme }: { p: any; theme: any }) {
+function MiniCard({ p, theme }: { p: any; theme: any; key?: React.Key }) {
   const { addToCart, formatPrice } = useCart();
   const [added, setAdded] = useState(false);
   const [imgFailed, setImgFailed] = useState(false);

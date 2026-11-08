@@ -1,17 +1,7 @@
 node_modules/
 build/
-dist/
 coverage/
 .DS_Store
 *.log
 .env*
 !.env.example
-
-# SQLite database and its write-ahead log
-data/
-*.db
-*.db-shm
-*.db-wal
-
-# Uploaded images
-data/uploads/

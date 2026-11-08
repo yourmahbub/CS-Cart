@@ -1,48 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAdmin } from '../../context/AdminContext';
-import { Edit, Trash2, Plus, X, Upload, Search, Filter, CheckCircle2, ChevronRight, BarChart3, Package as PackageIcon, Info, ImageIcon, PlayCircle, ArrowRight, Globe, Layers, ListTree } from 'lucide-react';
+import { Edit, Trash2, Plus, X, Upload, Search, Filter, CheckCircle2, ChevronRight, BarChart3, Package as PackageIcon, Info, ImageIcon, PlayCircle, ArrowRight, Globe, Layers } from 'lucide-react';
 import { Tooltip } from '../../components/Tooltip';
-import { BilingualField, BilingualList } from '../../components/admin/BilingualField';
-import { useLang } from '../../context/LanguageContext';
-import { computeMargin, money } from '../../lib/pricing';
-import { resolveCurrency } from '../../lib/currency';
 
 export default function AdminProducts() {
-  const { products, adminProducts, loadAdminProducts, deleteProduct, addProduct, updateProduct, categories, siteSettings } = useAdmin();
-  const { tAdmin } = useLang();
-  const currency = resolveCurrency(siteSettings?.currency);
+  const { products, setProducts, deleteProduct, addProduct, updateProduct, categories } = useAdmin();
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [formData, setFormData] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [activeStep, setActiveStep] = useState(1);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // The public list has no cost price, so the editor works off the admin copy.
-  useEffect(() => { loadAdminProducts().catch(() => {}); }, [loadAdminProducts]);
-  const catalogue = adminProducts.length ? adminProducts : products;
-
   const steps = [
     { id: 1, name: 'Basic Info', icon: Info },
     { id: 2, name: 'Media', icon: ImageIcon },
     { id: 3, name: 'Inventory & Pricing', icon: BarChart3 },
     { id: 4, name: 'SEO', icon: Globe },
-    { id: 5, name: 'Product Options', icon: Layers },
-    { id: 6, name: 'Specifications', icon: ListTree }
+    { id: 5, name: 'Product Options', icon: Layers }
   ];
-
-  /** Colours may be stored as strings (legacy) or {name, hex, image} objects. */
-  const normalizeColors = (colors: any): any[] => {
-    if (!colors) return [];
-    const arr = Array.isArray(colors) ? colors : String(colors).split(',');
-    return arr
-      .map((c: any) => (typeof c === 'string' ? { name: c.trim(), hex: '', image: '' } : c))
-      .filter((c: any) => c && c.name !== '');
-  };
-
-  /** Arabic translations live under `i18n.ar`; English stays in the main fields. */
-  const ar = formData.i18n?.ar ?? {};
-  const setAr = (patch: any) =>
-    setFormData((prev: any) => ({ ...prev, i18n: { ...(prev.i18n || {}), ar: { ...(prev.i18n?.ar || {}), ...patch } } }));
 
   const handleEdit = (product: any) => {
     setIsEditing(product.id);
@@ -73,7 +48,9 @@ export default function AdminProducts() {
         dataToSave.slug = dataToSave.title?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || '';
       }
 
-      dataToSave.colors = normalizeColors(dataToSave.colors);
+      if (typeof dataToSave.colors === 'string') {
+        dataToSave.colors = dataToSave.colors.split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
       if (typeof dataToSave.sizes === 'string') {
         dataToSave.sizes = dataToSave.sizes.split(',').map((s: string) => s.trim()).filter(Boolean);
       }
@@ -91,12 +68,12 @@ export default function AdminProducts() {
     }
   };
 
-  const filteredProducts = catalogue.filter((p: any) => p.title.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredProducts = products.filter((p: any) => p.title.toLowerCase().includes(searchTerm.toLowerCase()));
 
   if (isEditing !== null) {
     return (
       <div className="bg-white flex flex-col -m-10 min-h-[calc(100vh-88px)]">
-         <div className="px-10 py-5 border-b border-gray-200 flex justify-between items-center bg-white backdrop-blur-md sticky top-0 z-40 shadow-sm">
+         <div className="px-10 py-5 border-b border-gray-200 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-40 shadow-sm">
             <div className="flex items-center gap-6">
                <Tooltip content="Close editor" position="bottom">
                  <button onClick={() => setIsEditing(null)} className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors border border-gray-200 shadow-sm">
@@ -104,21 +81,21 @@ export default function AdminProducts() {
                  </button>
                </Tooltip>
                <div>
-                 <h2 className="text-xl font-bold text-gray-900">{tAdmin(isEditing === 0 ? 'Create New Product' : 'Edit Product')}</h2>
+                 <h2 className="text-xl font-bold text-gray-900">{isEditing === 0 ? 'Create New Product' : 'Edit Product'}</h2>
                  <p className="text-sm text-gray-500">{formData.title || 'Untitled Product'}</p>
                </div>
             </div>
             <div className="flex items-center gap-3">
-               <button onClick={() => setIsEditing(null)} className="px-5 py-2.5 border border-gray-200 rounded-xl text-gray-700 bg-white hover:bg-gray-50 font-semibold transition-colors shadow-sm">{tAdmin('Discard Changes')}</button>
+               <button onClick={() => setIsEditing(null)} className="px-5 py-2.5 border border-gray-200 rounded-xl text-gray-700 bg-white hover:bg-gray-50 font-semibold transition-colors shadow-sm">Discard Changes</button>
                <button onClick={handleSave} className="px-5 py-2.5 bg-[#00a651] text-white rounded-xl hover:bg-[#008c44] font-semibold transition-colors shadow-sm shadow-[#00a651]/20 flex items-center gap-2">
-                  <CheckCircle2 size={18} /> {tAdmin('Save Product')}
+                  <CheckCircle2 size={18} /> Save Product
                </button>
             </div>
          </div>
 
          {/* Tabs Navigation */}
-         <div className="bg-white backdrop-blur-md border-b border-gray-200 sticky top-[89px] z-30 shadow-sm">
-            <div className="flex items-center gap-8 px-8">
+         <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-[89px] z-30 shadow-sm">
+            <div className="max-w-4xl mx-auto flex items-center gap-8 px-8">
                {steps.map((step) => {
                  const isActive = activeStep === step.id;
                  const StepIcon = step.icon;
@@ -131,49 +108,29 @@ export default function AdminProducts() {
                      }`}
                    >
                       <StepIcon size={18} />
-                      {tAdmin(step.name)}
+                      {step.name}
                    </button>
                  )
                })}
             </div>
          </div>
 
-         {/* Full width — the paired English / Arabic inputs need the room. */}
-         <div className="p-8 w-full flex-1">
+         <div className="p-8 max-w-4xl mx-auto w-full flex-1">
             {activeStep === 1 && (
                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 relative bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
                   <div className="mb-6">
                     <h3 className="text-lg font-bold text-gray-900">Basic Information</h3>
                     <p className="text-sm text-gray-500">Provide the primary details about your product.</p>
                   </div>
-                  <BilingualField
-                    label="Product title"
-                    required
-                    value={{ en: formData.title || '', ar: ar.title || '' }}
-                    onChange={(v) => { setFormData({ ...formData, title: v.en }); setAr({ title: v.ar }); }}
-                    placeholderEn="e.g. Short sleeve t-shirt"
-                    placeholderAr="مثال: تي شيرت بأكمام قصيرة"
-                  />
-
-                  <BilingualField
-                    label="Description"
-                    multiline
-                    rows={6}
-                    value={{ en: formData.description || '', ar: ar.description || '' }}
-                    onChange={(v) => { setFormData({ ...formData, description: v.en }); setAr({ description: v.ar }); }}
-                    placeholderEn="Detailed product description…"
-                    placeholderAr="وصف تفصيلي للمنتج…"
-                  />
-
-                  <BilingualField
-                    label="Short note / badge"
-                    value={{ en: formData.shortNote || '', ar: ar.shortNote || '' }}
-                    onChange={(v) => { setFormData({ ...formData, shortNote: v.en }); setAr({ shortNote: v.ar }); }}
-                    placeholderEn="e.g. Limited edition"
-                    placeholderAr="مثال: إصدار محدود"
-                    hint="Highlighted line shown under the product title."
-                  />
-
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Product Title</label>
+                    <input type="text" placeholder="e.g., Short sleeve t-shirt" className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Description</label>
+                    <textarea rows={6} placeholder="Detailed product description..." className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all resize-y" value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})}></textarea>
+                  </div>
+                  
                   <div className="grid grid-cols-2 gap-6 pt-4">
                      <div>
                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Status</label>
@@ -375,27 +332,9 @@ export default function AdminProducts() {
                        <div>
                          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Selling Price</label>
                          <div className="relative">
-                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[13px]">{currency.symbol}</span>
+                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
                            <input type="number" className="w-full border border-gray-200 rounded-xl pl-8 pr-4 py-3 focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all font-medium" value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} />
                          </div>
-                       </div>
-                       <div>
-                         <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
-                            Cost price
-                            <Tooltip content="What this item costs you. Never shown to customers — used only for profit reporting.">
-                              <Info size={14} className="text-gray-400" />
-                            </Tooltip>
-                         </label>
-                         <div className="relative">
-                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[13px]">{currency.symbol}</span>
-                           <input
-                             type="number" min={0} step="0.01" placeholder="0.00"
-                             className="w-full border border-gray-200 rounded-xl pl-8 pr-4 py-3 focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all font-medium"
-                             value={formData.costPrice ?? ''}
-                             onChange={(e) => setFormData({ ...formData, costPrice: e.target.value === '' ? 0 : Number(e.target.value) })}
-                           />
-                         </div>
-                         <p className="text-[11px] text-gray-400 mt-1.5">Private — admin only.</p>
                        </div>
                        <div>
                          <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
@@ -403,52 +342,11 @@ export default function AdminProducts() {
                             <Tooltip content="To show a reduced price, move the product's original price into Compare at price. Enter a lower value into Price."><Info size={14} className="text-gray-400" /></Tooltip>
                          </label>
                          <div className="relative">
-                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[13px]">{currency.symbol}</span>
+                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
                            <input type="number" className="w-full border border-gray-200 rounded-xl pl-8 pr-4 py-3 focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all font-medium text-gray-400" value={formData.oldPrice || ''} onChange={e => setFormData({...formData, oldPrice: Number(e.target.value)})} placeholder="0.00" />
                          </div>
                        </div>
                      </div>
-
-                     {/* Live margin — recalculates as either price is edited */}
-                     {(() => {
-                       const m = computeMargin(formData.price, formData.costPrice);
-                       if (m.unknown) {
-                         return (
-                           <div className="flex items-start gap-2.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-[13px] text-gray-500">
-                             <Info size={15} className="shrink-0 mt-0.5 text-gray-400" />
-                             Enter a cost price to see the profit and margin for this product.
-                           </div>
-                         );
-                       }
-                       return (
-                         <div
-                           className={`grid grid-cols-2 sm:grid-cols-4 gap-4 rounded-xl px-5 py-4 border ${
-                             m.loss ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
-                           }`}
-                         >
-                           {[
-                             { label: 'Cost', value: money(m.cost, currency.code), plain: true },
-                             { label: m.loss ? 'Loss per unit' : 'Profit per unit', value: money(m.profit, currency.code) },
-                             { label: 'Margin', value: `${m.margin.toFixed(1)}%` },
-                             { label: 'Markup', value: `${m.markup.toFixed(1)}%` },
-                           ].map((cell) => (
-                             <div key={cell.label}>
-                               <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">{cell.label}</div>
-                               <div className={`text-[17px] font-bold ${
-                                 cell.plain ? 'text-gray-900' : m.loss ? 'text-red-600' : 'text-green-700'
-                               }`}>
-                                 {cell.value}
-                               </div>
-                             </div>
-                           ))}
-                           {m.loss && (
-                             <p className="col-span-2 sm:col-span-4 text-[12px] text-red-700 font-medium">
-                               You are selling below cost — every sale loses {money(Math.abs(m.profit), currency.code)}.
-                             </p>
-                           )}
-                         </div>
-                       );
-                     })()}
                   </div>
 
                   <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm space-y-6">
@@ -477,51 +375,22 @@ export default function AdminProducts() {
                        <h3 className="text-lg font-bold text-gray-900">Search Engine Optimization</h3>
                        <p className="text-sm text-gray-500">Improve how this product appears in search engine results.</p>
                      </div>
-                     <div className="space-y-6">
-                       {(() => {
-                         const enTitle = formData.metaTitle ?? formData.title ?? '';
-                         const arTitle = ar.metaTitle ?? ar.title ?? '';
-                         const enDesc = formData.metaDescription ?? formData.description ?? '';
-                         const arDesc = ar.metaDescription ?? ar.description ?? '';
-                         const counter = (v: string, max: number) => (
-                           <span className={`text-xs font-normal ${v.length > max ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
-                             {v.length} / {max}
-                           </span>
-                         );
-                         return (
-                           <>
-                             <div>
-                               <div className="flex items-center justify-between mb-1.5">
-                                 <span className="text-sm font-semibold text-gray-700">Page title</span>
-                                 <span className="flex items-center gap-3">EN {counter(enTitle, 70)} · AR {counter(arTitle, 70)}</span>
-                               </div>
-                               <BilingualField
-                                 label=""
-                                 value={{ en: enTitle, ar: arTitle }}
-                                 placeholderEn={formData.title || 'Product name shown in Google'}
-                                 placeholderAr={ar.title || 'اسم المنتج كما يظهر في جوجل'}
-                                 onChange={(v) => { setFormData({ ...formData, metaTitle: v.en }); setAr({ metaTitle: v.ar }); }}
-                               />
-                             </div>
-
-                             <div>
-                               <div className="flex items-center justify-between mb-1.5">
-                                 <span className="text-sm font-semibold text-gray-700">Meta description</span>
-                                 <span className="flex items-center gap-3">EN {counter(enDesc, 320)} · AR {counter(arDesc, 320)}</span>
-                               </div>
-                               <BilingualField
-                                 label=""
-                                 multiline
-                                 rows={3}
-                                 value={{ en: enDesc, ar: arDesc }}
-                                 placeholderEn="Write a compelling description to attract customers from search engines…"
-                                 placeholderAr="اكتب وصفاً جذاباً يجلب العملاء من محركات البحث…"
-                                 onChange={(v) => { setFormData({ ...formData, metaDescription: v.en }); setAr({ metaDescription: v.ar }); }}
-                               />
-                             </div>
-                           </>
-                         );
-                       })()}
+                     <div className="space-y-5">
+                       <div>
+                         <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center justify-between">
+                           Page Title
+                           <span className="text-xs text-gray-400 font-normal">{((formData.metaTitle ?? formData.title) || '').length} of 70 characters used</span>
+                         </label>
+                         <input type="text" className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all" value={formData.metaTitle ?? formData.title ?? ''} onChange={e => setFormData({...formData, metaTitle: e.target.value})} placeholder={formData.title} maxLength={70} />
+                       </div>
+                       
+                       <div>
+                         <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center justify-between">
+                           Meta Description
+                           <span className="text-xs text-gray-400 font-normal">{((formData.metaDescription ?? formData.description) || '').length} of 320 characters used</span>
+                         </label>
+                         <textarea rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all resize-none" value={formData.metaDescription ?? formData.description ?? ''} onChange={e => setFormData({...formData, metaDescription: e.target.value})} placeholder="Write a compelling description to attract customers from search engines..." maxLength={320} />
+                       </div>
 
                        <div>
                          <label className="block text-sm font-semibold text-gray-700 mb-1.5">URL Handle</label>
@@ -531,56 +400,21 @@ export default function AdminProducts() {
                            </span>
                            <input type="text" className="flex-1 w-full border border-gray-200 rounded-none rounded-r-xl px-4 py-3 focus:ring-2 focus:ring-[#00a651]/20 focus:border-[#00a651] outline-none transition-all text-sm" value={formData.slug ?? (formData.title?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || '')} onChange={e => setFormData({...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')})} placeholder={formData.title?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || ''} />
                          </div>
-                         <p className="text-[11px] text-gray-400 mt-1.5">
-                           One URL serves both languages — the page content switches with the visitor's language,
-                           so the address stays in Latin characters.
-                         </p>
                        </div>
                      </div>
                      <div className="mt-8 pt-6 border-t border-gray-100">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-4">Search engine preview</h4>
-                        {(() => {
-                          const url = `mystore.com/product/${
-                            (formData.slug ?? formData.title?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')) || 'product-slug'
-                          }`;
-                          const previews = [
-                            {
-                              key: 'en', label: 'English result', dir: 'ltr' as const,
-                              title: (formData.metaTitle ?? formData.title) || 'Product Title',
-                              desc: (formData.metaDescription ?? formData.description)
-                                || 'Add a meta description to control what Google shows here.',
-                            },
-                            {
-                              key: 'ar', label: 'نتيجة البحث بالعربية · Arabic result', dir: 'rtl' as const,
-                              title: (ar.metaTitle ?? ar.title) || '',
-                              desc: (ar.metaDescription ?? ar.description) || '',
-                            },
-                          ];
-                          return (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                              {previews.map((p) => (
-                                <div key={p.key}>
-                                  <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">{p.label}</div>
-                                  {p.title ? (
-                                    <div dir={p.dir} className="p-5 border border-gray-200 rounded-xl bg-white shadow-sm">
-                                      <div className="text-[#1a0dab] text-lg font-medium hover:underline cursor-pointer truncate">
-                                        {p.title} | Your Store
-                                      </div>
-                                      <div dir="ltr" className={`text-[#006621] text-sm truncate mt-1 ${p.dir === 'rtl' ? 'text-right' : ''}`}>
-                                        {url}
-                                      </div>
-                                      <div className="text-[#4d5156] text-sm mt-1.5 line-clamp-2">{p.desc}</div>
-                                    </div>
-                                  ) : (
-                                    <div className="p-5 border border-dashed border-gray-200 rounded-xl text-[13px] text-gray-400 h-full flex items-center">
-                                      No Arabic title yet — Arabic searchers would see the English result.
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })()}
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4">Search Engine Preview</h4>
+                        <div className="p-5 border border-gray-200 rounded-xl max-w-2xl bg-white shadow-sm">
+                           <div className="text-[#1a0dab] text-lg font-medium hover:underline cursor-pointer truncate">
+                             {(formData.metaTitle ?? formData.title) || 'Product Title'} | Your Store
+                           </div>
+                           <div className="text-[#006621] text-sm truncate mt-1">
+                             mystore.com/product/{(formData.slug ?? formData.title?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')) || 'product-slug'}
+                           </div>
+                           <div className="text-[#4d5156] text-sm mt-1.5 line-clamp-2">
+                             {(formData.metaDescription ?? formData.description) || 'Welcome to our store. We offer high-quality products at competitive prices, with fast shipping.'}
+                           </div>
+                        </div>
                      </div>
                   </div>
                </div>
@@ -606,74 +440,41 @@ export default function AdminProducts() {
                        {formData.hasOptions && (
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-300">
                            <div>
-                             <label className="block text-sm font-semibold text-gray-700 mb-1.5 text-left">Colors</label>
-                             <p className="text-xs text-gray-500 mb-2 text-left">Each colour becomes a swatch. Give it an image to show the product in that colour.</p>
-                             <div className="flex flex-col gap-2">
-                               {normalizeColors(formData.colors).map((c: any, index: number) => (
-                                 <div key={index} className="flex items-center gap-2 border border-gray-200 rounded-xl p-2 bg-white">
-                                   <span className="w-9 h-9 rounded-lg border border-gray-200 overflow-hidden shrink-0 flex items-center justify-center" style={{ background: c.image ? '#fff' : (c.hex || '#e5e7eb') }}>
-                                     {c.image && <img src={c.image} alt="" className="w-full h-full object-contain" />}
+                             <label className="block text-sm font-semibold text-gray-700 mb-1.5 text-left">Colors (Type and press Enter)</label>
+                             <div className="flex flex-wrap items-center gap-2 p-2 w-full border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-[#00a651]/20 focus-within:border-[#00a651] bg-white transition-all text-sm">
+                               {(Array.isArray(formData.colors) ? formData.colors : (formData.colors ? formData.colors.split(',') : [])).map((tag: string, index: number) => {
+                                 const t = tag.trim();
+                                 if(!t) return null;
+                                 return (
+                                   <span key={index} className="flex items-center gap-1 bg-gray-100 px-3 py-1.5 rounded-lg text-gray-800 font-medium pb-1">
+                                     {t}
+                                     <button type="button" onClick={() => {
+                                       const newColors = (Array.isArray(formData.colors) ? formData.colors : formData.colors.split(',')).map((s: string) => s.trim()).filter((s: string) => s !== t);
+                                       setFormData({...formData, colors: newColors});
+                                     }} className="hover:text-red-500 opacity-60 hover:opacity-100 focus:outline-none mt-0.5 ml-1">
+                                       <X size={14} strokeWidth={3} />
+                                     </button>
                                    </span>
-                                   <input
-                                     type="text"
-                                     value={c.name}
-                                     placeholder="Name"
-                                     onChange={(e) => {
-                                       const list = normalizeColors(formData.colors);
-                                       list[index] = { ...c, name: e.target.value };
-                                       setFormData({ ...formData, colors: list });
-                                     }}
-                                     className="w-28 border border-gray-200 rounded-lg px-2 py-1.5 text-sm shrink-0 outline-none focus:border-[#00a651]"
-                                   />
-                                   <input
-                                     type="color"
-                                     value={c.hex || '#cccccc'}
-                                     onChange={(e) => {
-                                       const list = normalizeColors(formData.colors);
-                                       list[index] = { ...c, hex: e.target.value };
-                                       setFormData({ ...formData, colors: list });
-                                     }}
-                                     className="w-9 h-9 border border-gray-200 rounded-lg p-0.5 cursor-pointer shrink-0"
-                                     title="Swatch colour (used when no image is set)"
-                                   />
-                                   <input
-                                     type="text"
-                                     value={c.image || ''}
-                                     placeholder="Image URL (optional)"
-                                     onChange={(e) => {
-                                       const list = normalizeColors(formData.colors);
-                                       list[index] = { ...c, image: e.target.value };
-                                       setFormData({ ...formData, colors: list });
-                                     }}
-                                     className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-[#00a651]"
-                                   />
-                                   <button
-                                     type="button"
-                                     onClick={() => setFormData({ ...formData, colors: normalizeColors(formData.colors).filter((_: any, i: number) => i !== index) })}
-                                     className="p-1.5 text-red-400 hover:text-red-600 shrink-0"
-                                   >
-                                     <X size={16} />
-                                   </button>
-                                 </div>
-                               ))}
-                               <button
-                                 type="button"
-                                 onClick={() => setFormData({ ...formData, colors: [...normalizeColors(formData.colors), { name: 'New colour', hex: '#cccccc', image: '' }] })}
-                                 className="w-full py-2 border border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2"
-                               >
-                                 <Plus size={16} /> Add colour
-                               </button>
-                             </div>
-                             <div className="mt-3">
-                               <label className="block text-sm font-semibold text-gray-700 mb-1.5 text-left">Default colour</label>
-                               <select
-                                 value={formData.defaultColor || ''}
-                                 onChange={(e) => setFormData({ ...formData, defaultColor: e.target.value })}
-                                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-[#00a651]"
-                               >
-                                 <option value="">First in the list</option>
-                                 {normalizeColors(formData.colors).map((c: any, i: number) => <option key={i} value={c.name}>{c.name}</option>)}
-                               </select>
+                                 )
+                               })}
+                               <input 
+                                 type="text" 
+                                 className="flex-1 outline-none min-w-[120px] bg-transparent py-1 px-2" 
+                                 placeholder="e.g. Red, Blue" 
+                                 onKeyDown={(e) => {
+                                   if (e.key === 'Enter' || e.key === ',') {
+                                     e.preventDefault();
+                                     const val = e.currentTarget.value.trim();
+                                     if (val) {
+                                       const current = Array.isArray(formData.colors) ? formData.colors : (formData.colors ? formData.colors.split(',') : []);
+                                       if(!current.includes(val)) {
+                                          setFormData({...formData, colors: [...current, val]});
+                                       }
+                                       e.currentTarget.value = '';
+                                     }
+                                   }
+                                 }}
+                               />
                              </div>
                            </div>
                            <div>
@@ -713,33 +514,114 @@ export default function AdminProducts() {
                                  }}
                                />
                              </div>
-                             <div className="grid grid-cols-2 gap-3 mt-3">
-                               <div>
-                                 <label className="block text-sm font-semibold text-gray-700 mb-1.5 text-left">Size label</label>
-                                 <input
-                                   type="text"
-                                   value={formData.sizeLabel || ''}
-                                   placeholder="e.g. Watch Size"
-                                   onChange={(e) => setFormData({ ...formData, sizeLabel: e.target.value })}
-                                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-[#00a651]"
-                                 />
-                               </div>
-                               <div>
-                                 <label className="block text-sm font-semibold text-gray-700 mb-1.5 text-left">Default size</label>
-                                 <select
-                                   value={formData.defaultSize || ''}
-                                   onChange={(e) => setFormData({ ...formData, defaultSize: e.target.value })}
-                                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-[#00a651]"
-                                 >
-                                   <option value="">First in the list</option>
-                                   {(Array.isArray(formData.sizes) ? formData.sizes : []).map((s: string) => <option key={s} value={s}>{s}</option>)}
-                                 </select>
-                               </div>
-                             </div>
                            </div>
                          </div>
                        )}
                        
+                       {/* Variant Details & Price Adjustments Matrix */}
+                       {((Array.isArray(formData.colors) && formData.colors.length > 0) || (Array.isArray(formData.sizes) && formData.sizes.length > 0)) && (
+                         <div className="pt-4 border-t border-gray-100 space-y-4">
+                           <div>
+                             <h4 className="text-sm font-bold text-gray-900 text-left">Variant Details (Images & Price Adjustments)</h4>
+                             <p className="text-xs text-gray-500 text-left">Selecting a variant on the storefront will update the product price and main image accordingly.</p>
+                           </div>
+
+                           {Array.isArray(formData.colors) && formData.colors.length > 0 && (
+                             <div className="space-y-2">
+                               <span className="text-xs font-semibold text-gray-700 block text-left">Color Variants</span>
+                               <div className="border border-gray-200 rounded-xl overflow-hidden">
+                                 <table className="w-full text-left text-xs">
+                                   <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
+                                     <tr>
+                                       <th className="py-2.5 px-3">Color</th>
+                                       <th className="py-2.5 px-3">Custom Image URL</th>
+                                       <th className="py-2.5 px-3">Price Adjustment ($)</th>
+                                     </tr>
+                                   </thead>
+                                   <tbody className="divide-y divide-gray-100">
+                                     {formData.colors.map((colorName, cIdx) => {
+                                       const opts = Array.isArray(formData.colorOptions) ? formData.colorOptions : [];
+                                       const currentOpt = opts.find(o => o.name && o.name.toLowerCase() === colorName.trim().toLowerCase()) || {};
+                                       return (
+                                         <tr key={cIdx} className="hover:bg-gray-50">
+                                           <td className="py-2.5 px-3 font-semibold text-gray-900 flex items-center gap-2">
+                                             <div className="w-4 h-4 rounded-full border border-gray-300" style={{ backgroundColor: colorName.toLowerCase() }} />
+                                             <span>{colorName}</span>
+                                           </td>
+                                           <td className="py-2.5 px-3">
+                                             <input 
+                                               type="text" 
+                                               placeholder="https://... or /image.png" 
+                                               value={currentOpt.image || ""} 
+                                               onChange={(e) => {
+                                                 const updated = [...opts.filter(o => !o.name || o.name.toLowerCase() !== colorName.trim().toLowerCase()), { ...currentOpt, name: colorName.trim(), image: e.target.value }];
+                                                 setFormData({ ...formData, colorOptions: updated });
+                                               }}
+                                               className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#00a651]"
+                                             />
+                                           </td>
+                                           <td className="py-2.5 px-3">
+                                             <input 
+                                               type="number" 
+                                               placeholder="0" 
+                                               value={currentOpt.priceModifier ?? ""} 
+                                               onChange={(e) => {
+                                                 const updated = [...opts.filter(o => !o.name || o.name.toLowerCase() !== colorName.trim().toLowerCase()), { ...currentOpt, name: colorName.trim(), priceModifier: Number(e.target.value) || 0 }];
+                                                 setFormData({ ...formData, colorOptions: updated });
+                                               }}
+                                               className="w-24 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#00a651]"
+                                             />
+                                           </td>
+                                         </tr>
+                                       );
+                                     })}
+                                   </tbody>
+                                 </table>
+                               </div>
+                             </div>
+                           )}
+
+                           {Array.isArray(formData.sizes) && formData.sizes.length > 0 && (
+                             <div className="space-y-2 pt-2">
+                               <span className="text-xs font-semibold text-gray-700 block text-left">Size Price Modifiers</span>
+                               <div className="border border-gray-200 rounded-xl overflow-hidden">
+                                 <table className="w-full text-left text-xs">
+                                   <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
+                                     <tr>
+                                       <th className="py-2.5 px-3">Size</th>
+                                       <th className="py-2.5 px-3">Price Adjustment ($)</th>
+                                     </tr>
+                                   </thead>
+                                   <tbody className="divide-y divide-gray-100">
+                                     {formData.sizes.map((sizeName, sIdx) => {
+                                       const opts = Array.isArray(formData.sizeOptions) ? formData.sizeOptions : [];
+                                       const currentOpt = opts.find(o => o.name && o.name.toLowerCase() === sizeName.trim().toLowerCase()) || {};
+                                       return (
+                                         <tr key={sIdx} className="hover:bg-gray-50">
+                                           <td className="py-2.5 px-3 font-semibold text-gray-900">{sizeName}</td>
+                                           <td className="py-2.5 px-3">
+                                             <input 
+                                               type="number" 
+                                               placeholder="0" 
+                                               value={currentOpt.priceModifier ?? ""} 
+                                               onChange={(e) => {
+                                                 const updated = [...opts.filter(o => !o.name || o.name.toLowerCase() !== sizeName.trim().toLowerCase()), { ...currentOpt, name: sizeName.trim(), priceModifier: Number(e.target.value) || 0 }];
+                                                 setFormData({ ...formData, sizeOptions: updated });
+                                               }}
+                                               className="w-24 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#00a651]"
+                                             />
+                                           </td>
+                                         </tr>
+                                       );
+                                     })}
+                                   </tbody>
+                                 </table>
+                               </div>
+                             </div>
+                           )}
+                         </div>
+                       )}
+
                        <div className="pt-6 border-t border-gray-100">
                            <h4 className="text-sm font-semibold text-gray-900 mb-4 text-left">Short Info / Badges</h4>
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -790,7 +672,7 @@ export default function AdminProducts() {
                                         onChange={(e) => setFormData({...formData, accessoryProductId: Number(e.target.value) || null})}
                                       >
                                         <option value="">Select a product...</option>
-                                        {catalogue.filter((p: any) => p.id !== isEditing).map((p: any) => (
+                                        {products.filter((p: any) => p.id !== isEditing).map((p: any) => (
                                           <option key={p.id} value={p.id}>{p.title}</option>
                                         ))}
                                       </select>
@@ -805,200 +687,6 @@ export default function AdminProducts() {
                </div>
             )}
             
-            {activeStep === 6 && (
-               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  {/* Brand */}
-                  <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-                     <div className="mb-5">
-                       <h3 className="text-lg font-bold text-gray-900">Brand</h3>
-                       <p className="text-sm text-gray-500">Shown at the top of the product page sidebar.</p>
-                     </div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                       <div>
-                         <label className="block text-sm font-semibold text-gray-700 mb-1.5 text-left">Brand name</label>
-                         <input type="text" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-[#00a651]" placeholder="e.g. Apple" />
-                       </div>
-                       <div>
-                         <label className="block text-sm font-semibold text-gray-700 mb-1.5 text-left">Brand logo URL</label>
-                         <div className="flex items-center gap-3">
-                           <input type="text" value={formData.brandLogo || ''} onChange={e => setFormData({...formData, brandLogo: e.target.value})} className="flex-1 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-[#00a651]" placeholder="https://…" />
-                           {formData.brandLogo && <img src={formData.brandLogo} alt="" className="h-10 w-10 object-contain shrink-0" />}
-                         </div>
-                       </div>
-                     </div>
-                  </div>
-
-                  {/* Specification groups */}
-                  <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-                     <div className="mb-5">
-                       <h3 className="text-lg font-bold text-gray-900">Specification groups</h3>
-                       <p className="text-sm text-gray-500">
-                         Rendered as the "Features" table. Each row takes an English and an Arabic value.
-                         Leave a group title empty for the ungrouped first column.
-                       </p>
-                     </div>
-                     <div className="flex flex-col gap-4">
-                       {(formData.specGroups || []).map((g: any, gi: number) => {
-                         // The Arabic table mirrors the English one position for position.
-                         const arGroups: any[] = ar.specGroups || [];
-                         const arG = arGroups[gi] || { title: '', items: [] };
-
-                         const patchGroup = (p: any) => {
-                           const groups = [...(formData.specGroups || [])];
-                           groups[gi] = { ...g, ...p };
-                           setFormData({ ...formData, specGroups: groups });
-                         };
-                         const patchArGroup = (p: any) => {
-                           const groups = [...arGroups];
-                           groups[gi] = { ...arG, ...p };
-                           setAr({ specGroups: groups });
-                         };
-                         const removeGroup = () => {
-                           setFormData({ ...formData, specGroups: formData.specGroups.filter((_: any, i: number) => i !== gi) });
-                           setAr({ specGroups: arGroups.filter((_: any, i: number) => i !== gi) });
-                         };
-                         const addRow = () => {
-                           patchGroup({ items: [...(g.items || []), { name: '', value: '' }] });
-                           patchArGroup({ items: [...(arG.items || []), { name: '', value: '' }] });
-                         };
-                         const removeRow = (ii: number) => {
-                           patchGroup({ items: g.items.filter((_: any, i: number) => i !== ii) });
-                           patchArGroup({ items: (arG.items || []).filter((_: any, i: number) => i !== ii) });
-                         };
-
-                         return (
-                           <div key={g.id || gi} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-                             <div className="flex items-start gap-3 mb-3">
-                               <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
-                                 <div className="flex flex-col gap-1">
-                                   <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Group title · English</span>
-                                   <input
-                                     type="text" dir="ltr" value={g.title || ''} placeholder="e.g. Electronics"
-                                     onChange={(e) => patchGroup({ title: e.target.value })}
-                                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-[#00a651]"
-                                   />
-                                 </div>
-                                 <div className="flex flex-col gap-1">
-                                   <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">العربية · Arabic</span>
-                                   <input
-                                     type="text" dir="rtl" value={arG.title || ''} placeholder="مثال: إلكترونيات"
-                                     onChange={(e) => patchArGroup({ title: e.target.value })}
-                                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-right outline-none focus:border-[#00a651]"
-                                   />
-                                 </div>
-                               </div>
-                               <button type="button" onClick={removeGroup} className="p-1.5 text-red-400 hover:text-red-600 mt-5 shrink-0">
-                                 <X size={16} />
-                               </button>
-                             </div>
-
-                             <div className="flex flex-col gap-2">
-                               {(g.items || []).map((it: any, ii: number) => {
-                                 const arIt = (arG.items || [])[ii] || { name: '', value: '' };
-                                 const setEn = (patch: any) => {
-                                   const items = [...g.items];
-                                   items[ii] = { ...it, ...patch };
-                                   patchGroup({ items });
-                                 };
-                                 const setArIt = (patch: any) => {
-                                   const items = [...(arG.items || [])];
-                                   items[ii] = { ...arIt, ...patch };
-                                   patchArGroup({ items });
-                                 };
-                                 return (
-                                   <div key={ii} className="flex items-start gap-2 bg-white border border-gray-200 rounded-lg p-2">
-                                     <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                       <div className="flex gap-2">
-                                         <input type="text" dir="ltr" value={it.name} placeholder="Attribute (EN)"
-                                           onChange={(e) => setEn({ name: e.target.value })}
-                                           className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-[#00a651]" />
-                                         <input type="text" dir="ltr" value={it.value} placeholder="Value (EN)"
-                                           onChange={(e) => setEn({ value: e.target.value })}
-                                           className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-[#00a651]" />
-                                       </div>
-                                       <div className="flex gap-2">
-                                         <input type="text" dir="rtl" value={arIt.name} placeholder="الخاصية"
-                                           onChange={(e) => setArIt({ name: e.target.value })}
-                                           className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2.5 py-2 text-sm text-right outline-none focus:border-[#00a651]" />
-                                         <input type="text" dir="rtl" value={arIt.value} placeholder="القيمة"
-                                           onChange={(e) => setArIt({ value: e.target.value })}
-                                           className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2.5 py-2 text-sm text-right outline-none focus:border-[#00a651]" />
-                                       </div>
-                                     </div>
-                                     <button type="button" onClick={() => removeRow(ii)} className="p-1.5 text-red-400 hover:text-red-600 shrink-0">
-                                       <X size={16} />
-                                     </button>
-                                   </div>
-                                 );
-                               })}
-                               <button type="button" onClick={addRow}
-                                 className="w-full py-2 border border-dashed border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-white flex items-center justify-center gap-2">
-                                 <Plus size={16} /> Add attribute
-                               </button>
-                             </div>
-                           </div>
-                         );
-                       })}
-                       <button
-                         type="button"
-                         onClick={() => setFormData({ ...formData, specGroups: [...(formData.specGroups || []), { id: `g_${Date.now()}`, title: '', items: [{ name: '', value: '' }] }] })}
-                         className="w-full py-2.5 border border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2"
-                       >
-                         <Plus size={16} /> Add specification group
-                       </button>
-                     </div>
-                  </div>
-
-                  {/* Key features */}
-                  <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-                     <div className="mb-5">
-                       <h3 className="text-lg font-bold text-gray-900">Key features</h3>
-                       <p className="text-sm text-gray-500">One bullet per line, in both languages. Keep the lines in the same order so they match up.</p>
-                     </div>
-                     <BilingualList
-                       label="Feature list"
-                       rows={7}
-                       en={formData.keyFeatures || []}
-                       ar={ar.keyFeatures || []}
-                       onChange={(v) => { setFormData({ ...formData, keyFeatures: v.en }); setAr({ keyFeatures: v.ar }); }}
-                     />
-                  </div>
-
-                  {/* Rating breakdown */}
-                  <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-                     <div className="mb-5">
-                       <h3 className="text-lg font-bold text-gray-900">Rating breakdown</h3>
-                       <p className="text-sm text-gray-500">Percentage bars in the review summary. Leave blank to calculate from the real reviews.</p>
-                     </div>
-                     <div className="grid grid-cols-5 gap-3">
-                       {[5, 4, 3, 2, 1].map((star) => (
-                         <div key={star}>
-                           <label className="block text-sm font-semibold text-gray-700 mb-1.5 text-left">{star} stars %</label>
-                           <input
-                             type="number"
-                             min={0}
-                             max={100}
-                             value={formData.ratingBreakdown?.[star] ?? ''}
-                             onChange={(e) => setFormData({
-                               ...formData,
-                               ratingBreakdown: { ...(formData.ratingBreakdown || {}), [star]: Number(e.target.value) },
-                             })}
-                             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-[#00a651]"
-                           />
-                         </div>
-                       ))}
-                     </div>
-                     <button
-                       type="button"
-                       onClick={() => { const { ratingBreakdown, ...rest } = formData; setFormData(rest); }}
-                       className="mt-3 text-sm font-medium text-gray-600 hover:text-gray-900 underline"
-                     >
-                       Clear and calculate automatically
-                     </button>
-                  </div>
-               </div>
-            )}
-
             {/* Form Controls */}
             <div className="mt-8 flex items-center justify-between border-t border-gray-100 pt-6">
                  <div>
@@ -1012,7 +700,7 @@ export default function AdminProducts() {
                     )}
                  </div>
                  <div>
-                   {activeStep < 6 ? (
+                   {activeStep < 5 ? (
                      <button 
                        onClick={() => setActiveStep(activeStep + 1)}
                        className="px-8 py-3 bg-[#00a651] text-white rounded-xl hover:bg-[#008c44] font-bold transition-colors shadow-md shadow-[#00a651]/20 flex items-center gap-2 text-lg transform hover:-translate-y-0.5"
@@ -1063,15 +751,13 @@ export default function AdminProducts() {
           </div>
        </div>
        <div className="overflow-x-auto flex-1 p-0">
-          <table className="w-full text-left border-collapse min-w-[1000px]">
+          <table className="w-full text-left border-collapse min-w-[800px]">
              <thead>
                 <tr className="bg-gray-50/50 border-b border-gray-100 text-xs uppercase tracking-wider text-gray-500 font-bold">
                    <th className="px-6 py-4 font-semibold">Product</th>
                    <th className="px-6 py-4 font-semibold">Status</th>
                    <th className="px-6 py-4 font-semibold">Inventory</th>
-                   <th className="px-6 py-4 font-semibold">Cost</th>
                    <th className="px-6 py-4 font-semibold">Price</th>
-                   <th className="px-6 py-4 font-semibold">Profit</th>
                    <th className="px-6 py-4 text-right font-semibold">Actions</th>
                 </tr>
              </thead>
@@ -1100,47 +786,12 @@ export default function AdminProducts() {
                            </span>
                          )}
                       </td>
-                      <td className="px-6 py-4 text-sm font-medium">
-                         {p.inStock ? (
-                           <span className={Number(p.stock) > 0 && Number(p.stock) <= 5 ? 'text-amber-600' : 'text-gray-700'}>
-                             {Number(p.stock) || 0} in stock
-                           </span>
-                         ) : (
-                           <span className="text-gray-400">Out of stock</span>
-                         )}
+                      <td className="px-6 py-4 text-sm font-medium text-gray-700">
+                         {p.inStock ? '99 in stock' : 'Out of stock'}
                       </td>
-
-                      {/* Cost + profit are admin-only figures; the storefront never receives them. */}
-                      <td className="px-6 py-4">
-                         {Number(p.costPrice) > 0 ? (
-                           <span className="text-sm font-medium text-gray-700">{money(Number(p.costPrice), currency.code)}</span>
-                         ) : (
-                           <Tooltip content="No cost price set — this product's sales count as pure profit" position="top">
-                             <span className="text-sm text-amber-600 cursor-help">Not set</span>
-                           </Tooltip>
-                         )}
-                      </td>
-
                       <td className="px-6 py-4">
                          <div className="font-bold text-gray-900 text-sm">${p.price}</div>
                          {p.oldPrice > p.price && <div className="text-xs text-gray-400 line-through">${p.oldPrice}</div>}
-                      </td>
-
-                      <td className="px-6 py-4">
-                         {(() => {
-                           const m = computeMargin(p.price, p.costPrice);
-                           if (m.unknown) return <span className="text-sm text-gray-300">—</span>;
-                           return (
-                             <>
-                               <div className={`text-sm font-bold ${m.loss ? 'text-red-600' : 'text-green-700'}`}>
-                                 {money(m.profit, currency.code)}
-                               </div>
-                               <div className={`text-xs ${m.loss ? 'text-red-500' : 'text-gray-400'}`}>
-                                 {m.margin.toFixed(1)}% margin
-                               </div>
-                             </>
-                           );
-                         })()}
                       </td>
                       <td className="px-6 py-4 text-right">
                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1156,7 +807,7 @@ export default function AdminProducts() {
                 ))}
                 {filteredProducts.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                       No products found.
                     </td>
                   </tr>

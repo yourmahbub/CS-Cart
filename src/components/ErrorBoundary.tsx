@@ -1,20 +1,26 @@
-import React from 'react';
+import React, { Component, type ReactNode, type ErrorInfo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
-interface State { error: Error | null }
+interface Props {
+  children: ReactNode;
+}
+
+interface State {
+  error: Error | null;
+}
 
 /**
  * Catches render errors so a single broken component cannot leave the customer
  * staring at a blank white page.
  */
-export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
-  state: State = { error: null };
+export class ErrorBoundary extends Component<Props, State> {
+  override state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
+  componentDidCatch(error: Error, info: ErrorInfo) {
     // Wire this to your error reporting service (Sentry, etc.) when you have one.
     console.error('Unhandled UI error:', error, info.componentStack);
   }

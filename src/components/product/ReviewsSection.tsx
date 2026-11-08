@@ -281,7 +281,7 @@ export function ReviewsSection({ product, config, onAddReview, onVote }: Props) 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    Array.from(files).forEach((file) => {
+    Array.from(files).forEach((file: File) => {
       const reader = new FileReader();
       reader.onload = (ev) => {
         if (ev.target?.result) setForm((p) => ({ ...p, media: [...p.media, ev.target!.result as string] }));

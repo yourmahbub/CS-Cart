@@ -55,7 +55,7 @@ export function PromoBanners() {
     setSpotIndex((i) => (i + dir + spotlight.length) % Math.max(spotlight.length, 1));
 
   /* A compact product row, used in both side columns. */
-  const MiniProduct = ({ product, imageSize, withCart }: { product: any; imageSize: string; withCart?: boolean }) => (
+  const MiniProduct = ({ product, imageSize, withCart }: { product: any; imageSize: string; withCart?: boolean; key?: React.Key }) => (
     <div className="flex items-start gap-4 p-5 relative border-b border-gray-200/70 last:border-b-0">
       <Link to={`/product/${product.slug || product.id}`} className={`${imageSize} flex-shrink-0 flex items-center justify-center mix-blend-multiply pt-1`}>
         <img src={product.image || product.images?.[0]} alt={tr(product.title)} className="object-contain w-full max-h-full" />
@@ -179,8 +179,8 @@ export function PromoBanners() {
   if (!top && !bottom && !spotlight.length) return null;
 
   return (
-    <section className="mb-14">
-      <div className="flex flex-col items-center mb-8 mt-12 w-full">
+    <section className="mb-14 overflow-hidden">
+      <div className="flex flex-col items-center mb-8 mt-12 w-full max-w-full">
         <div className="relative flex items-center justify-center w-full max-w-[1600px] mx-auto px-4">
           <div className="absolute w-full h-[1.5px] border-t-[1.5px] border-gray-200 z-0" />
           <div className="relative z-10 flex flex-col sm:flex-row items-center gap-4 sm:gap-6 bg-white px-2 sm:px-6">
